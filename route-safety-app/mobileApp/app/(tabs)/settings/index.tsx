@@ -22,13 +22,11 @@ export default function SettingsScreen() {
     pointsPerDay: 20,
     usePointsSystem: true,
     includeAIRecommendations: true,
-    showDistanceOnRoute: true,
   });
   const [pointsInput, setPointsInput] = useState("20");
   const [usePointsSystem, setUsePointsSystem] = useState(true);
   const [includeAIRecommendations, setIncludeAIRecommendations] =
     useState(true);
-  const [showDistanceOnRoute, setShowDistanceOnRoute] = useState(true);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,7 +40,6 @@ export default function SettingsScreen() {
       setPointsInput(loaded.pointsPerDay.toString());
       setUsePointsSystem(loaded.usePointsSystem ?? true);
       setIncludeAIRecommendations(loaded.includeAIRecommendations ?? true);
-      setShowDistanceOnRoute(loaded.showDistanceOnRoute ?? true);
     } catch (error) {
       console.error("[SETTINGS] Ошибка загрузки:", error);
     } finally {
@@ -61,7 +58,6 @@ export default function SettingsScreen() {
       pointsPerDay: points,
       usePointsSystem,
       includeAIRecommendations,
-      showDistanceOnRoute,
     };
 
     try {
@@ -86,7 +82,7 @@ export default function SettingsScreen() {
   }
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.scrollView}
       contentContainerStyle={styles.scrollViewContent}
     >
@@ -156,34 +152,11 @@ export default function SettingsScreen() {
               thumbColor={includeAIRecommendations ? "#fff" : "#f4f3f4"}
             />
           </View>
-              </View>
+        </View>
 
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Отображение километража</Text>
-                <Text style={styles.cardText}>
-                  Показывать километраж на линии маршрута.
-                  {"\n\n"}
-                  Интервал отображения автоматически подстраивается под масштаб карты:
-                  {"\n"}• Масштаб 1-10 км: каждые 1 км
-                  {"\n"}• Масштаб 10-50 км: каждые 10 км
-                  {"\n"}• Масштаб 50-100 км: каждые 50 км
-                  {"\n"}• Масштаб >100 км: каждые 100 км
-                </Text>
-                
-                <View style={styles.switchContainer}>
-                  <Text style={styles.switchLabel}>Показывать километраж на маршруте</Text>
-                  <Switch
-                    value={showDistanceOnRoute}
-                    onValueChange={setShowDistanceOnRoute}
-                    trackColor={{ false: "#767577", true: "#007AFF" }}
-                    thumbColor={showDistanceOnRoute ? "#fff" : "#f4f3f4"}
-                  />
-                </View>
-              </View>
-
-              <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-                <Text style={styles.saveButtonText}>Сохранить настройки</Text>
-              </TouchableOpacity>
+        <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+          <Text style={styles.saveButtonText}>Сохранить настройки</Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );

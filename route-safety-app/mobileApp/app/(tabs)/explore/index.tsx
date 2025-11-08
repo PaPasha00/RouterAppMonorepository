@@ -524,6 +524,20 @@ export default function ExploreScreen() {
                           {existing.formattedGeoContext}
                         </Text>
                       )}
+                      {existing.analysisStructured.geography
+                        ?.physicalGeography && (
+                        <View style={styles.physicalGeographyContainer}>
+                          <Text style={styles.physicalGeographyTitle}>
+                            Физико-географическая характеристика:
+                          </Text>
+                          <Text style={styles.physicalGeographyText}>
+                            {
+                              existing.analysisStructured.geography
+                                .physicalGeography
+                            }
+                          </Text>
+                        </View>
+                      )}
                       {existing.analysisStructured.geography?.notes && (
                         <Text style={styles.cardText}>
                           {existing.analysisStructured.geography.notes}

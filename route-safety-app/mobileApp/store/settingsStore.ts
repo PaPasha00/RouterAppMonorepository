@@ -6,7 +6,6 @@ export interface Settings {
   pointsPerDay: number; // Максимальное количество очков в день
   usePointsSystem: boolean; // Использовать ли систему очков для разбивки маршрута
   includeAIRecommendations: boolean; // Включать ли рекомендации от ИИ в анализ
-  showDistanceOnRoute: boolean; // Показывать ли километраж на линии маршрута
 }
 
 let cachedSettings: Settings | null = null;
@@ -59,7 +58,6 @@ export async function loadSettings(): Promise<Settings> {
     pointsPerDay: DEFAULT_POINTS_PER_DAY,
     usePointsSystem: true,
     includeAIRecommendations: true,
-    showDistanceOnRoute: true,
   };
   cachedSettings = defaultSettings;
   return defaultSettings;
@@ -104,7 +102,6 @@ export function getSettings(): Settings {
     pointsPerDay: DEFAULT_POINTS_PER_DAY,
     usePointsSystem: true,
     includeAIRecommendations: true,
-    showDistanceOnRoute: true,
   };
   cachedSettings = defaultSettings;
   return defaultSettings;

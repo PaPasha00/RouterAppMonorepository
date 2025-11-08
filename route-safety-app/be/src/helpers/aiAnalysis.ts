@@ -36,6 +36,7 @@ export function generateAnalysisPrompt(
       regions: "string[]",
       areas: "string[]",
       localities: "string[]",
+      physicalGeography: "string (3-4 предложения с физико-географической характеристикой местности: рельеф, климат, растительность, водные объекты)",
       notes: "string",
     },
     days: [
@@ -123,6 +124,8 @@ ${JSON.stringify(jsonSchema, null, 2)}
 - Высоты: мин ${routeAnalysis.minElevation}м, макс ${routeAnalysis.maxElevation}м, перепад ${routeAnalysis.maxElevation - routeAnalysis.minElevation}м${weatherInfo}${recommendationsNote}
 
 ВАЖНО: Используй РЕАЛЬНЫЕ данные о погоде из раздела "ПРОГНОЗ ПОГОДЫ ПО ДНЯМ" для заполнения поля weather в массиве days. Не придумывай погоду, используй только предоставленные данные.
+
+ВАЖНО: В поле geography.physicalGeography обязательно добавь физико-географическую характеристику местности в 3-4 предложениях. Опиши рельеф (равнинный, холмистый, горный), климатические особенности, растительность (леса, степи, тундра и т.д.), наличие водных объектов (реки, озера, болота). Используй информацию о высотах, уклонах и типе местности из предоставленных данных.
 
 Верни ТОЛЬКО валидный JSON по указанной схеме.
   `;

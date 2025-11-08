@@ -20,8 +20,7 @@ import MapView, {
   UserLocationChangeEvent,
 } from "react-native-maps";
 import * as Location from "expo-location";
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useFocusEffect } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PlaceSearch, {
   PlaceResult,
   PlaceSearchHandle,
@@ -71,7 +70,7 @@ async function fetchRoadRoute(points: LatLng[]): Promise<LatLng[] | null> {
   }
 }
 
-// Функция для построения маршрута по реке через водные пути OSM
+// Функция для построения маршрута по реке (упрощенный подход)
 async function fetchRiverRoute(points: LatLng[]): Promise<LatLng[] | null> {
   try {
     if (points.length < 2) {
@@ -84,52 +83,47 @@ async function fetchRiverRoute(points: LatLng[]): Promise<LatLng[] | null> {
       points.length,
       "точек"
     );
-    // Используем Overpass API для получения водных путей (waterways) из OSM
-    // Строим маршрут по ближайшим водным путям между точками
-    const route: LatLng[] = [];
 
+    const route: LatLng[] = [];
+    const MAX_DISTANCE_TO_WATERWAY = 30.0; // Максимальное расстояние до водного пути в км
+
+    // Обрабатываем каждый сегмент между точками
     for (let i = 0; i < points.length - 1; i++) {
       const start = points[i];
       const end = points[i + 1];
+
       console.log(
-        `[RIVER] Обрабатываем сегмент ${i + 1}/${
+        `[RIVER] Обработка сегмента ${i + 1}/${
           points.length - 1
         }: [${start.latitude.toFixed(4)}, ${start.longitude.toFixed(
           4
         )}] -> [${end.latitude.toFixed(4)}, ${end.longitude.toFixed(4)}]`
       );
 
-      // Получаем водные пути в расширенной области между точками
-      // Уменьшаем область поиска для более точного поиска
+      // Вычисляем область поиска для этого сегмента
       const distance = haversineKm(start, end);
-      // Используем меньшее расширение - максимум 0.02 градуса (примерно 2 км)
-      const expandFactor = Math.min(0.02, Math.max(0.005, distance * 0.005));
-      const bbox = [
-        Math.min(start.longitude, end.longitude) - expandFactor,
-        Math.min(start.latitude, end.latitude) - expandFactor,
-        Math.max(start.longitude, end.longitude) + expandFactor,
-        Math.max(start.latitude, end.latitude) + expandFactor,
-      ].join(",");
+      const expandFactor = Math.min(0.02, Math.max(0.005, distance * 0.01));
+
+      const minLat = Math.min(start.latitude, end.latitude) - expandFactor;
+      const maxLat = Math.max(start.latitude, end.latitude) + expandFactor;
+      const minLon = Math.min(start.longitude, end.longitude) - expandFactor;
+      const maxLon = Math.max(start.longitude, end.longitude) + expandFactor;
+
+      // Overpass API bbox формат: [south, west, north, east] = [min_lat, min_lon, max_lat, max_lon]
+      const bbox = [minLat, minLon, maxLat, maxLon].join(",");
 
       console.log(
-        `[RIVER] Расстояние между точками: ${distance.toFixed(
-          2
-        )} км, расширение области: ${expandFactor.toFixed(4)} градуса (≈${(
-          expandFactor * 111
-        ).toFixed(1)} км)`
+        `[RIVER] Область поиска для сегмента ${
+          i + 1
+        }: bbox=${bbox}, расширение=${expandFactor.toFixed(4)}`
       );
 
-      // Overpass API запрос для получения водных путей (rivers, streams, canals)
+      // Overpass API запрос для получения водных путей в области
       const overpassQuery = `[out:json][timeout:30];
 (
   way["waterway"~"^(river|stream|canal|ditch|drain)$"]["waterway"!="dam"]["waterway"!="weir"](bbox:${bbox});
 );
 out geom;`;
-
-      const MAX_DISTANCE_TO_WATERWAY = 5.0; // Максимальное расстояние до водного пути в км (увеличено для лучшего поиска)
-
-      let foundWaterway = false;
-      let overpassData: any = null;
 
       // Пробуем несколько Overpass API серверов
       const overpassServers = [
@@ -138,14 +132,12 @@ out geom;`;
         "https://lz4.overpass-api.de/api/interpreter",
       ];
 
-      let lastError: any = null;
+      let overpassData: any = null;
 
       for (const server of overpassServers) {
         try {
           console.log(
-            `[RIVER] Запрос к Overpass API (${server}) для сегмента ${
-              i + 1
-            }, bbox: ${bbox}`
+            `[RIVER] Запрос к Overpass API (${server}) для сегмента ${i + 1}`
           );
           const overpassResponse = await fetch(server, {
             method: "POST",
@@ -155,7 +147,59 @@ out geom;`;
 
           if (overpassResponse.ok) {
             overpassData = await overpassResponse.json();
-            console.log(`[RIVER] Успешный ответ от ${server}`);
+            console.log(
+              `[RIVER] Успешный ответ от ${server} для сегмента ${i + 1}`
+            );
+            console.log(`[RIVER] Статус ответа: ${overpassResponse.status}`);
+            console.log(
+              `[RIVER] Найдено водных путей: ${
+                overpassData.elements?.length || 0
+              }`
+            );
+            // Логируем формат координат первого водного пути для отладки
+            if (overpassData.elements && overpassData.elements.length > 0) {
+              const firstWay = overpassData.elements[0];
+              if (firstWay.geometry && firstWay.geometry.length > 0) {
+                const firstPoint = firstWay.geometry[0];
+                console.log(
+                  `[RIVER] Пример координат первого водного пути:`,
+                  firstPoint,
+                  `(тип: ${typeof firstPoint.lat}, ${typeof firstPoint.lon})`
+                );
+                // Пробуем извлечь координаты
+                let testLat: number | undefined, testLon: number | undefined;
+                if (Array.isArray(firstPoint)) {
+                  [testLat, testLon] = firstPoint;
+                  console.log(
+                    `[RIVER] Координаты как массив: [${testLat}, ${testLon}]`
+                  );
+                } else if (
+                  firstPoint.lat !== undefined &&
+                  firstPoint.lon !== undefined
+                ) {
+                  testLat = firstPoint.lat;
+                  testLon = firstPoint.lon;
+                  console.log(
+                    `[RIVER] Координаты как объект: {lat: ${testLat}, lon: ${testLon}}`
+                  );
+                }
+                console.log(
+                  `[RIVER] Точки сегмента для сравнения: start=[${start.latitude}, ${start.longitude}], end=[${end.latitude}, ${end.longitude}]`
+                );
+                // Вычисляем расстояние для проверки
+                if (testLat !== undefined && testLon !== undefined) {
+                  const testDist = haversineKm(start, {
+                    latitude: testLat,
+                    longitude: testLon,
+                  });
+                  console.log(
+                    `[RIVER] Расстояние от start до первой точки водного пути: ${testDist.toFixed(
+                      3
+                    )} км`
+                  );
+                }
+              }
+            }
             break;
           } else {
             console.log(
@@ -163,343 +207,333 @@ out geom;`;
                 overpassResponse.status
               }`
             );
-            lastError = { status: overpassResponse.status, server };
           }
         } catch (error) {
-          console.log(`[RIVER] Ошибка при запросе к ${server}:`, error);
-          lastError = error;
+          console.log(
+            `[RIVER] Ошибка при запросе к ${server} для сегмента ${i + 1}:`,
+            error
+          );
         }
       }
 
-      if (overpassData) {
-        const waterways = overpassData.elements || [];
-        console.log(
-          `[RIVER] Найдено водных путей в области: ${waterways.length}`
-        );
+      if (
+        !overpassData ||
+        !overpassData.elements ||
+        overpassData.elements.length === 0
+      ) {
+        console.log(`[RIVER] Водные пути не найдены для сегмента ${i + 1}`);
+        return null;
+      }
 
-        if (waterways.length > 0) {
-          // Сначала фильтруем водные пути, которые находятся слишком далеко
-          // Это предотвращает обработку водных путей, которые находятся на расстоянии тысяч километров
-          const filteredWaterways = waterways.filter((way: any) => {
-            if (!way.geometry || way.geometry.length < 2) return false;
+      // Фильтруем водные пути с валидной геометрией
+      let validWaterways = overpassData.elements.filter(
+        (way: any) => way.geometry && way.geometry.length >= 2
+      );
 
-            // Проверяем, есть ли хотя бы одна точка водного пути в разумной близости к нашим точкам
-            let hasNearbyPoint = false;
-            for (const geom of way.geometry) {
-              const distToStart = haversineKm(start, {
-                latitude: geom.lat,
-                longitude: geom.lon,
-              });
-              const distToEnd = haversineKm(end, {
-                latitude: geom.lat,
-                longitude: geom.lon,
-              });
+      // Предварительная фильтрация: оставляем только водные пути, которые находятся близко к точкам сегмента
+      // Это помогает убрать водные пути из других областей, которые случайно попали в bbox
+      const PRELIMINARY_FILTER_DISTANCE = 35.0; // км (чуть больше MAX_DISTANCE_TO_WATERWAY для предварительной фильтрации)
+      validWaterways = validWaterways.filter((way: any) => {
+        const geometry = way.geometry;
+        if (!geometry || geometry.length === 0) return false;
 
-              // Если хотя бы одна точка водного пути близко к нашим точкам (в пределах 20 км), включаем его
-              if (distToStart <= 20 || distToEnd <= 20) {
-                hasNearbyPoint = true;
-                break;
-              }
-            }
-            return hasNearbyPoint;
-          });
-
-          console.log(
-            `[RIVER] После предварительной фильтрации осталось ${filteredWaterways.length} из ${waterways.length} водных путей`
-          );
-
-          // Находим водный путь, который ближе всего к обеим точкам
-          // Используем более гибкую логику: ищем водный путь с минимальной суммой расстояний
-          let bestWay: any = null;
-          let bestStartIdx = -1;
-          let bestEndIdx = -1;
-          let minTotalDist = Infinity;
-
-          for (const way of filteredWaterways) {
-            if (way.geometry && way.geometry.length > 1) {
-              // Находим ближайшие точки на водном пути к начальной и конечной точкам
-              let closestStartIdx = -1;
-              let closestEndIdx = -1;
-              let minStartDist = Infinity;
-              let minEndDist = Infinity;
-
-              for (let j = 0; j < way.geometry.length; j++) {
-                const geom = way.geometry[j];
-                const distToStart = haversineKm(start, {
-                  latitude: geom.lat,
-                  longitude: geom.lon,
-                });
-                const distToEnd = haversineKm(end, {
-                  latitude: geom.lat,
-                  longitude: geom.lon,
-                });
-
-                if (distToStart < minStartDist) {
-                  minStartDist = distToStart;
-                  closestStartIdx = j;
-                }
-                if (distToEnd < minEndDist) {
-                  minEndDist = distToEnd;
-                  closestEndIdx = j;
-                }
-              }
-
-              // Вычисляем общее расстояние
-              const totalDist = minStartDist + minEndDist;
-              const maxDist = Math.max(minStartDist, minEndDist);
-
-              // Выбираем водный путь, который:
-              // 1. Ближе всего к обеим точкам (минимальная сумма расстояний)
-              // 2. И хотя бы одна точка близко (в пределах MAX_DISTANCE_TO_WATERWAY)
-              // 3. И максимальное расстояние не слишком большое (не более 2x MAX_DISTANCE_TO_WATERWAY)
-              // 4. И индексы разные (иначе маршрут не будет построен)
-              if (
-                (minStartDist <= MAX_DISTANCE_TO_WATERWAY ||
-                  minEndDist <= MAX_DISTANCE_TO_WATERWAY) &&
-                maxDist <= MAX_DISTANCE_TO_WATERWAY * 2 &&
-                closestStartIdx !== closestEndIdx // Критично: индексы должны быть разные!
-              ) {
-                // Выбираем водный путь, который ближе всего к обеим точкам
-                if (totalDist < minTotalDist) {
-                  minTotalDist = totalDist;
-                  bestWay = way;
-                  bestStartIdx = closestStartIdx;
-                  bestEndIdx = closestEndIdx;
-                }
-              }
-            }
-          }
-
-          // Если не нашли в пределах ограничений, попробуем найти самый близкий (но не слишком далеко)
-          if (!bestWay) {
-            const MAX_FALLBACK_DISTANCE = 50.0; // Максимальное расстояние для fallback поиска
-            console.log(
-              `[RIVER] Не найдено водных путей в пределах ${MAX_DISTANCE_TO_WATERWAY} км, ищем ближайший (макс. ${MAX_FALLBACK_DISTANCE} км)...`
-            );
-            minTotalDist = Infinity;
-
-            // Используем уже отфильтрованные водные пути для fallback поиска
-            for (const way of filteredWaterways) {
-              if (way.geometry && way.geometry.length > 1) {
-                let closestStartIdx = -1;
-                let closestEndIdx = -1;
-                let minStartDist = Infinity;
-                let minEndDist = Infinity;
-
-                for (let j = 0; j < way.geometry.length; j++) {
-                  const geom = way.geometry[j];
-                  const distToStart = haversineKm(start, {
-                    latitude: geom.lat,
-                    longitude: geom.lon,
-                  });
-                  const distToEnd = haversineKm(end, {
-                    latitude: geom.lat,
-                    longitude: geom.lon,
-                  });
-
-                  if (distToStart < minStartDist) {
-                    minStartDist = distToStart;
-                    closestStartIdx = j;
-                  }
-                  if (distToEnd < minEndDist) {
-                    minEndDist = distToEnd;
-                    closestEndIdx = j;
-                  }
-                }
-
-                // Проверяем, что водный путь не слишком далеко и индексы разные
-                const maxDist = Math.max(minStartDist, minEndDist);
-                if (
-                  maxDist <= MAX_FALLBACK_DISTANCE &&
-                  closestStartIdx !== closestEndIdx
-                ) {
-                  const totalDist = minStartDist + minEndDist;
-                  if (totalDist < minTotalDist) {
-                    minTotalDist = totalDist;
-                    bestWay = way;
-                    bestStartIdx = closestStartIdx;
-                    bestEndIdx = closestEndIdx;
-                  }
-                }
-              }
-            }
-
-            if (bestWay) {
-              const foundStartDist = haversineKm(start, {
-                latitude: bestWay.geometry[bestStartIdx].lat,
-                longitude: bestWay.geometry[bestStartIdx].lon,
-              });
-              const foundEndDist = haversineKm(end, {
-                latitude: bestWay.geometry[bestEndIdx].lat,
-                longitude: bestWay.geometry[bestEndIdx].lon,
-              });
-              console.log(
-                `[RIVER] Найден ближайший водный путь: расстояние до начала: ${foundStartDist.toFixed(
-                  2
-                )} км, до конца: ${foundEndDist.toFixed(
-                  2
-                )} км, индексы: ${bestStartIdx} -> ${bestEndIdx}`
-              );
-            } else {
-              console.log(
-                `[RIVER] Не найдено подходящих водных путей даже в пределах ${MAX_FALLBACK_DISTANCE} км`
-              );
-            }
-          }
-
-          // Если нашли подходящий водный путь, строим маршрут строго по его геометрии
-          // Важно: индексы должны быть разные, иначе маршрут не будет построен
-          if (
-            bestWay &&
-            bestWay.geometry &&
-            bestWay.geometry.length > 1 &&
-            bestStartIdx >= 0 &&
-            bestEndIdx >= 0 &&
-            bestStartIdx !== bestEndIdx // Критично: индексы должны быть разные!
+        // Проверяем, есть ли хотя бы одна точка геометрии близко к началу или концу сегмента
+        for (const geomPoint of geometry) {
+          let lat: number, lon: number;
+          if (Array.isArray(geomPoint)) {
+            [lat, lon] = geomPoint;
+          } else if (
+            geomPoint.lat !== undefined &&
+            geomPoint.lon !== undefined
           ) {
-            // Вычисляем расстояния для лога
-            const logStartDist = haversineKm(start, {
-              latitude: bestWay.geometry[bestStartIdx].lat,
-              longitude: bestWay.geometry[bestStartIdx].lon,
-            });
-            const logEndDist = haversineKm(end, {
-              latitude: bestWay.geometry[bestEndIdx].lat,
-              longitude: bestWay.geometry[bestEndIdx].lon,
-            });
-            console.log(
-              `[RIVER] Используем водный путь с ${
-                bestWay.geometry.length
-              } точками, индексы: ${bestStartIdx} -> ${bestEndIdx}, расстояние до начала: ${logStartDist.toFixed(
-                2
-              )} км, до конца: ${logEndDist.toFixed(2)} км`
-            );
-
-            // Добавляем начальную точку, если она не на водном пути
-            const startOnWaterway =
-              haversineKm(start, {
-                latitude: bestWay.geometry[bestStartIdx].lat,
-                longitude: bestWay.geometry[bestStartIdx].lon,
-              }) < 0.1;
-
-            if (!startOnWaterway) {
-              route.push(start);
-            }
-
-            // Добавляем точки водного пути между начальной и конечной точками
-            // Определяем правильное направление движения по водному пути
-            if (bestStartIdx < bestEndIdx) {
-              // Идем от startIdx к endIdx
-              for (let j = bestStartIdx; j <= bestEndIdx; j++) {
-                const geom = bestWay.geometry[j];
-                route.push({
-                  latitude: geom.lat,
-                  longitude: geom.lon,
-                });
-              }
-            } else {
-              // Идем от startIdx к endIdx в обратном направлении
-              for (let j = bestStartIdx; j >= bestEndIdx; j--) {
-                const geom = bestWay.geometry[j];
-                route.push({
-                  latitude: geom.lat,
-                  longitude: geom.lon,
-                });
-              }
-            }
-
-            // Добавляем конечную точку, если она не на водном пути
-            const endOnWaterway =
-              haversineKm(end, {
-                latitude: bestWay.geometry[bestEndIdx].lat,
-                longitude: bestWay.geometry[bestEndIdx].lon,
-              }) < 0.1;
-
-            if (!endOnWaterway) {
-              route.push(end);
-            }
-
-            console.log(
-              `[RIVER] Добавлено точек из водного пути для сегмента ${
-                i + 1
-              } (всего в маршруте: ${route.length})`
-            );
-            foundWaterway = true;
+            lat = geomPoint.lat;
+            lon = geomPoint.lon;
           } else {
-            // Логируем информацию о найденных водных путях для отладки
-            if (waterways.length > 0) {
-              console.log(
-                `[RIVER] Найдено ${
-                  waterways.length
-                } водных путей, но ни один не подходит для сегмента ${
-                  i + 1
-                } (требуется расстояние <= ${MAX_DISTANCE_TO_WATERWAY} км от обеих точек)`
-              );
-              // Показываем расстояния до ближайших водных путей
-              for (let w = 0; w < Math.min(3, waterways.length); w++) {
-                const way = waterways[w];
-                if (way.geometry && way.geometry.length > 0) {
-                  let minStartDist = Infinity;
-                  let minEndDist = Infinity;
-                  for (const geom of way.geometry) {
-                    const distToStart = haversineKm(start, {
-                      latitude: geom.lat,
-                      longitude: geom.lon,
-                    });
-                    const distToEnd = haversineKm(end, {
-                      latitude: geom.lat,
-                      longitude: geom.lon,
-                    });
-                    if (distToStart < minStartDist) minStartDist = distToStart;
-                    if (distToEnd < minEndDist) minEndDist = distToEnd;
-                  }
-                  console.log(
-                    `[RIVER] Водный путь ${
-                      w + 1
-                    }: расстояние до начала: ${minStartDist.toFixed(
-                      2
-                    )} км, до конца: ${minEndDist.toFixed(2)} км`
-                  );
-                }
-              }
-            } else {
-              console.log(
-                `[RIVER] Не найден подходящий водный путь для сегмента ${
-                  i + 1
-                } (требуется расстояние <= ${MAX_DISTANCE_TO_WATERWAY} км)`
-              );
-            }
+            continue;
           }
-        } else {
-          console.log(
-            `[RIVER] Водные пути не найдены в области для сегмента ${i + 1}`
-          );
-        }
-      } else {
-        console.log(
-          `[RIVER] Не удалось получить данные от Overpass API для сегмента ${
-            i + 1
-          }`
-        );
-        if (lastError) {
-          console.log("[RIVER] Последняя ошибка:", lastError);
-        }
-      }
 
-      // Если не нашли водный путь для этого сегмента, возвращаем null
-      if (!foundWaterway) {
+          const distToStart = haversineKm(start, {
+            latitude: lat,
+            longitude: lon,
+          });
+          const distToEnd = haversineKm(end, { latitude: lat, longitude: lon });
+
+          if (
+            distToStart <= PRELIMINARY_FILTER_DISTANCE ||
+            distToEnd <= PRELIMINARY_FILTER_DISTANCE
+          ) {
+            return true;
+          }
+        }
+        return false;
+      });
+
+      console.log(
+        `[RIVER] После предварительной фильтрации: ${validWaterways.length} водных путей из ${overpassData.elements.length}`
+      );
+
+      if (validWaterways.length === 0) {
         console.log(
-          `[RIVER] Не удалось найти водный путь для сегмента ${
+          `[RIVER] Нет валидных водных путей для сегмента ${
             i + 1
-          }, маршрут не может быть построен`
+          } после фильтрации`
         );
         return null;
       }
+
+      // Находим ближайший водный путь к начальной и конечной точкам
+      let bestWaterway: any = null;
+      let bestStartIdx = -1;
+      let bestEndIdx = -1;
+      let minTotalDistance = Infinity;
+
+      // Собираем статистику для отладки
+      const candidates: Array<{
+        wayId: number;
+        minStartDist: number;
+        minEndDist: number;
+        startIdx: number;
+        endIdx: number;
+        reason: string;
+      }> = [];
+
+      for (const way of validWaterways) {
+        const geometry = way.geometry;
+
+        // Находим ближайшие точки геометрии к началу и концу
+        let closestStartIdx = 0;
+        let closestEndIdx = 0;
+        let minStartDist = Infinity;
+        let minEndDist = Infinity;
+
+        for (let j = 0; j < geometry.length; j++) {
+          const geomPoint = geometry[j];
+
+          // Overpass API может возвращать координаты как объект {lat, lon} или массив [lat, lon]
+          let lat: number, lon: number;
+          if (Array.isArray(geomPoint)) {
+            // Формат массива [lat, lon]
+            [lat, lon] = geomPoint;
+          } else if (
+            geomPoint.lat !== undefined &&
+            geomPoint.lon !== undefined
+          ) {
+            // Формат объекта {lat, lon}
+            lat = geomPoint.lat;
+            lon = geomPoint.lon;
+          } else {
+            // Пропускаем некорректные точки
+            console.warn(
+              `[RIVER] Некорректный формат координат в точке ${j}:`,
+              geomPoint
+            );
+            continue;
+          }
+
+          const startDist = haversineKm(start, {
+            latitude: lat,
+            longitude: lon,
+          });
+          const endDist = haversineKm(end, {
+            latitude: lat,
+            longitude: lon,
+          });
+
+          if (startDist < minStartDist) {
+            minStartDist = startDist;
+            closestStartIdx = j;
+          }
+          if (endDist < minEndDist) {
+            minEndDist = endDist;
+            closestEndIdx = j;
+          }
+        }
+
+        // Проверяем условия и собираем информацию для отладки
+        let reason = "";
+        if (minStartDist > MAX_DISTANCE_TO_WATERWAY) {
+          reason = `start too far (${minStartDist.toFixed(3)} km)`;
+        } else if (minEndDist > MAX_DISTANCE_TO_WATERWAY) {
+          reason = `end too far (${minEndDist.toFixed(3)} km)`;
+        } else if (closestStartIdx === closestEndIdx && geometry.length > 1) {
+          // Если обе точки попадают на одну и ту же точку геометрии, но геометрия длинная,
+          // можно использовать соседние точки
+          if (closestStartIdx === 0) {
+            closestEndIdx = 1;
+            minEndDist = haversineKm(end, {
+              latitude: geometry[1].lat,
+              longitude: geometry[1].lon,
+            });
+            reason = `same point, using next (idx=${closestStartIdx}->${closestEndIdx})`;
+          } else if (closestStartIdx === geometry.length - 1) {
+            closestEndIdx = geometry.length - 2;
+            minEndDist = haversineKm(end, {
+              latitude: geometry[geometry.length - 2].lat,
+              longitude: geometry[geometry.length - 2].lon,
+            });
+            reason = `same point, using prev (idx=${closestStartIdx}->${closestEndIdx})`;
+          } else {
+            // Выбираем направление, которое ближе к конечной точке
+            const distToNext = haversineKm(end, {
+              latitude: geometry[closestStartIdx + 1].lat,
+              longitude: geometry[closestStartIdx + 1].lon,
+            });
+            const distToPrev = haversineKm(end, {
+              latitude: geometry[closestStartIdx - 1].lat,
+              longitude: geometry[closestStartIdx - 1].lon,
+            });
+            if (distToNext < distToPrev) {
+              closestEndIdx = closestStartIdx + 1;
+              minEndDist = distToNext;
+              reason = `same point, using next (idx=${closestStartIdx}->${closestEndIdx})`;
+            } else {
+              closestEndIdx = closestStartIdx - 1;
+              minEndDist = distToPrev;
+              reason = `same point, using prev (idx=${closestStartIdx}->${closestEndIdx})`;
+            }
+          }
+        } else if (closestStartIdx === closestEndIdx) {
+          reason = `same point, single point geometry (idx=${closestStartIdx})`;
+        } else {
+          reason = "OK";
+        }
+
+        // Сохраняем топ-5 кандидатов для отладки
+        if (
+          candidates.length < 5 ||
+          minStartDist + minEndDist <
+            Math.max(...candidates.map((c) => c.minStartDist + c.minEndDist))
+        ) {
+          candidates.push({
+            wayId: way.id,
+            minStartDist,
+            minEndDist,
+            startIdx: closestStartIdx,
+            endIdx: closestEndIdx,
+            reason,
+          });
+          candidates.sort(
+            (a, b) =>
+              a.minStartDist + a.minEndDist - (b.minStartDist + b.minEndDist)
+          );
+          if (candidates.length > 5) candidates.pop();
+        }
+
+        // Проверяем, что обе точки достаточно близки к водному пути
+        // После обработки случая с одинаковыми индексами, проверяем финальные индексы
+        if (
+          minStartDist <= MAX_DISTANCE_TO_WATERWAY &&
+          minEndDist <= MAX_DISTANCE_TO_WATERWAY &&
+          closestStartIdx !== closestEndIdx
+        ) {
+          const totalDist = minStartDist + minEndDist;
+          if (totalDist < minTotalDistance) {
+            minTotalDistance = totalDist;
+            bestWaterway = way;
+            bestStartIdx = closestStartIdx;
+            bestEndIdx = closestEndIdx;
+          }
+        }
+      }
+
+      if (!bestWaterway || bestStartIdx === -1 || bestEndIdx === -1) {
+        console.log(
+          `[RIVER] Не найден подходящий водный путь для сегмента ${
+            i + 1
+          } (макс. расстояние: ${MAX_DISTANCE_TO_WATERWAY} км)`
+        );
+        console.log(
+          `[RIVER] Точки сегмента: start=[${start.latitude.toFixed(
+            6
+          )}, ${start.longitude.toFixed(6)}], end=[${end.latitude.toFixed(
+            6
+          )}, ${end.longitude.toFixed(6)}]`
+        );
+        console.log(`[RIVER] Топ-5 ближайших водных путей:`, candidates);
+        return null;
+      }
+
+      console.log(
+        `[RIVER] Найден водный путь для сегмента ${i + 1}: ID=${
+          bestWaterway.id
+        }, индексы: ${bestStartIdx} -> ${bestEndIdx}`
+      );
+
+      // Строим путь по геометрии водного пути
+      const geometry = bestWaterway.geometry;
+      const segmentPath: LatLng[] = [];
+
+      // Определяем направление (вперед или назад по геометрии)
+      const forward = bestStartIdx < bestEndIdx;
+      const startIdx = forward ? bestStartIdx : bestEndIdx;
+      const endIdx = forward ? bestEndIdx : bestStartIdx;
+
+      // Функция для извлечения координат из точки геометрии
+      const getCoords = (point: any): { lat: number; lon: number } => {
+        if (Array.isArray(point)) {
+          return { lat: point[0], lon: point[1] };
+        } else if (point.lat !== undefined && point.lon !== undefined) {
+          return { lat: point.lat, lon: point.lon };
+        } else {
+          throw new Error(
+            `Некорректный формат координат: ${JSON.stringify(point)}`
+          );
+        }
+      };
+
+      // Добавляем начальную точку пользователя, если она не на водном пути
+      const startGeomCoords = getCoords(geometry[startIdx]);
+      const distToStart = haversineKm(start, {
+        latitude: startGeomCoords.lat,
+        longitude: startGeomCoords.lon,
+      });
+      if (distToStart > 0.05) {
+        segmentPath.push(start);
+      }
+
+      // Добавляем точки геометрии водного пути
+      for (let j = startIdx; j <= endIdx; j++) {
+        const coords = getCoords(geometry[j]);
+        segmentPath.push({
+          latitude: coords.lat,
+          longitude: coords.lon,
+        });
+      }
+
+      // Добавляем конечную точку пользователя, если она не на водном пути
+      const endGeomCoords = getCoords(geometry[endIdx]);
+      const distToEnd = haversineKm(end, {
+        latitude: endGeomCoords.lat,
+        longitude: endGeomCoords.lon,
+      });
+      if (distToEnd > 0.05) {
+        segmentPath.push(end);
+      }
+
+      // Добавляем путь сегмента к общему маршруту
+      if (i === 0) {
+        route.push(...segmentPath);
+      } else {
+        // Пропускаем первую точку, если она совпадает с последней точкой предыдущего сегмента
+        const firstPoint = segmentPath[0];
+        const lastPoint = route[route.length - 1];
+        const dist = haversineKm(firstPoint, lastPoint);
+        if (dist < 0.01) {
+          route.push(...segmentPath.slice(1));
+        } else {
+          route.push(...segmentPath);
+        }
+      }
+
+      console.log(
+        `[RIVER] Сегмент ${i + 1} построен: ${segmentPath.length} точек`
+      );
     }
 
     console.log(`[RIVER] Маршрут построен: ${route.length} точек`);
     return route.length > 0 ? route : null;
   } catch (error) {
-    console.error("[RIVER] Error building river route:", error);
+    console.error("[RIVER] Ошибка построения маршрута:", error);
     return null;
   }
 }
@@ -537,23 +571,8 @@ export default function HomeScreen() {
   const searchRef = useRef<PlaceSearchHandle>(null);
   const mapRef = useRef<MapView>(null);
 
-  // Получаем настройку отображения километража из store
+  // Состояние для отображения километража на маршруте
   const [showDistanceMarkers, setShowDistanceMarkers] = useState(false);
-
-  // Синхронизируем состояние с настройками из store при монтировании и при фокусе экрана
-  useEffect(() => {
-    const settings = getSettings();
-    setShowDistanceMarkers(settings.showDistanceOnRoute ?? false);
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      // Синхронизируем настройки при возврате на экран
-      clearSettingsCache();
-      const settings = getSettings();
-      setShowDistanceMarkers(settings.showDistanceOnRoute ?? false);
-    }, [])
-  );
 
   const tourismTypes = [
     "пеший",
@@ -1067,17 +1086,8 @@ export default function HomeScreen() {
           <Ionicons name="water" size={18} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={async () => {
-            const newValue = !showDistanceMarkers;
-            setShowDistanceMarkers(newValue);
-            // Обновляем настройку в store
-            const currentSettings = getSettings();
-            const updatedSettings = {
-              ...currentSettings,
-              showDistanceOnRoute: newValue,
-            };
-            await saveSettings(updatedSettings);
-            clearSettingsCache();
+          onPress={() => {
+            setShowDistanceMarkers(!showDistanceMarkers);
           }}
           activeOpacity={0.9}
           style={[
