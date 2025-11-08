@@ -31,6 +31,9 @@ export interface RouteAnalysisRequest {
   tourismType: string;
   startDate: string;
   endDate: string;
+  pointsPerDay?: number; // Максимальное количество очков в день (по умолчанию 20)
+  usePointsSystem?: boolean; // Использовать ли систему очков для разбивки маршрута (по умолчанию true)
+  includeAIRecommendations?: boolean; // Включать ли рекомендации от ИИ в анализ (по умолчанию true)
 }
 
 export interface GeographicLocation {

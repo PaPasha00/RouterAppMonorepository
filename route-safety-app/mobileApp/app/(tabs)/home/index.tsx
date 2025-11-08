@@ -20,7 +20,8 @@ import MapView, {
   UserLocationChangeEvent,
 } from "react-native-maps";
 import * as Location from "expo-location";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useFocusEffect } from "expo-router";
 import PlaceSearch, {
   PlaceResult,
   PlaceSearchHandle,
@@ -34,6 +35,11 @@ import { getElevationData } from "./helpers";
 import { setCurrentRoute } from "../../../store/routeStore";
 import { clearCurrentRoute } from "../../../store/routeStore";
 import { clearAnalysisResult } from "../../../store/analysisStore";
+import {
+  getSettings,
+  saveSettings,
+  clearSettingsCache,
+} from "../../../store/settingsStore";
 
 function haversineKm(a: LatLng, b: LatLng): number {
   const R = 6371;
@@ -65,6 +71,439 @@ async function fetchRoadRoute(points: LatLng[]): Promise<LatLng[] | null> {
   }
 }
 
+// Функция для построения маршрута по реке через водные пути OSM
+async function fetchRiverRoute(points: LatLng[]): Promise<LatLng[] | null> {
+  try {
+    if (points.length < 2) {
+      console.log("[RIVER] Недостаточно точек для построения маршрута");
+      return null;
+    }
+
+    console.log(
+      "[RIVER] Начинаем построение маршрута по реке для",
+      points.length,
+      "точек"
+    );
+    // Используем Overpass API для получения водных путей (waterways) из OSM
+    // Строим маршрут по ближайшим водным путям между точками
+    const route: LatLng[] = [];
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const start = points[i];
+      const end = points[i + 1];
+      console.log(
+        `[RIVER] Обрабатываем сегмент ${i + 1}/${
+          points.length - 1
+        }: [${start.latitude.toFixed(4)}, ${start.longitude.toFixed(
+          4
+        )}] -> [${end.latitude.toFixed(4)}, ${end.longitude.toFixed(4)}]`
+      );
+
+      // Получаем водные пути в расширенной области между точками
+      // Уменьшаем область поиска для более точного поиска
+      const distance = haversineKm(start, end);
+      // Используем меньшее расширение - максимум 0.02 градуса (примерно 2 км)
+      const expandFactor = Math.min(0.02, Math.max(0.005, distance * 0.005));
+      const bbox = [
+        Math.min(start.longitude, end.longitude) - expandFactor,
+        Math.min(start.latitude, end.latitude) - expandFactor,
+        Math.max(start.longitude, end.longitude) + expandFactor,
+        Math.max(start.latitude, end.latitude) + expandFactor,
+      ].join(",");
+
+      console.log(
+        `[RIVER] Расстояние между точками: ${distance.toFixed(
+          2
+        )} км, расширение области: ${expandFactor.toFixed(4)} градуса (≈${(
+          expandFactor * 111
+        ).toFixed(1)} км)`
+      );
+
+      // Overpass API запрос для получения водных путей (rivers, streams, canals)
+      const overpassQuery = `[out:json][timeout:30];
+(
+  way["waterway"~"^(river|stream|canal|ditch|drain)$"]["waterway"!="dam"]["waterway"!="weir"](bbox:${bbox});
+);
+out geom;`;
+
+      const MAX_DISTANCE_TO_WATERWAY = 5.0; // Максимальное расстояние до водного пути в км (увеличено для лучшего поиска)
+
+      let foundWaterway = false;
+      let overpassData: any = null;
+
+      // Пробуем несколько Overpass API серверов
+      const overpassServers = [
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.kumi.systems/api/interpreter",
+        "https://lz4.overpass-api.de/api/interpreter",
+      ];
+
+      let lastError: any = null;
+
+      for (const server of overpassServers) {
+        try {
+          console.log(
+            `[RIVER] Запрос к Overpass API (${server}) для сегмента ${
+              i + 1
+            }, bbox: ${bbox}`
+          );
+          const overpassResponse = await fetch(server, {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: `data=${encodeURIComponent(overpassQuery)}`,
+          });
+
+          if (overpassResponse.ok) {
+            overpassData = await overpassResponse.json();
+            console.log(`[RIVER] Успешный ответ от ${server}`);
+            break;
+          } else {
+            console.log(
+              `[RIVER] ${server} вернул ошибку для сегмента ${i + 1}, статус: ${
+                overpassResponse.status
+              }`
+            );
+            lastError = { status: overpassResponse.status, server };
+          }
+        } catch (error) {
+          console.log(`[RIVER] Ошибка при запросе к ${server}:`, error);
+          lastError = error;
+        }
+      }
+
+      if (overpassData) {
+        const waterways = overpassData.elements || [];
+        console.log(
+          `[RIVER] Найдено водных путей в области: ${waterways.length}`
+        );
+
+        if (waterways.length > 0) {
+          // Сначала фильтруем водные пути, которые находятся слишком далеко
+          // Это предотвращает обработку водных путей, которые находятся на расстоянии тысяч километров
+          const filteredWaterways = waterways.filter((way: any) => {
+            if (!way.geometry || way.geometry.length < 2) return false;
+
+            // Проверяем, есть ли хотя бы одна точка водного пути в разумной близости к нашим точкам
+            let hasNearbyPoint = false;
+            for (const geom of way.geometry) {
+              const distToStart = haversineKm(start, {
+                latitude: geom.lat,
+                longitude: geom.lon,
+              });
+              const distToEnd = haversineKm(end, {
+                latitude: geom.lat,
+                longitude: geom.lon,
+              });
+
+              // Если хотя бы одна точка водного пути близко к нашим точкам (в пределах 20 км), включаем его
+              if (distToStart <= 20 || distToEnd <= 20) {
+                hasNearbyPoint = true;
+                break;
+              }
+            }
+            return hasNearbyPoint;
+          });
+
+          console.log(
+            `[RIVER] После предварительной фильтрации осталось ${filteredWaterways.length} из ${waterways.length} водных путей`
+          );
+
+          // Находим водный путь, который ближе всего к обеим точкам
+          // Используем более гибкую логику: ищем водный путь с минимальной суммой расстояний
+          let bestWay: any = null;
+          let bestStartIdx = -1;
+          let bestEndIdx = -1;
+          let minTotalDist = Infinity;
+
+          for (const way of filteredWaterways) {
+            if (way.geometry && way.geometry.length > 1) {
+              // Находим ближайшие точки на водном пути к начальной и конечной точкам
+              let closestStartIdx = -1;
+              let closestEndIdx = -1;
+              let minStartDist = Infinity;
+              let minEndDist = Infinity;
+
+              for (let j = 0; j < way.geometry.length; j++) {
+                const geom = way.geometry[j];
+                const distToStart = haversineKm(start, {
+                  latitude: geom.lat,
+                  longitude: geom.lon,
+                });
+                const distToEnd = haversineKm(end, {
+                  latitude: geom.lat,
+                  longitude: geom.lon,
+                });
+
+                if (distToStart < minStartDist) {
+                  minStartDist = distToStart;
+                  closestStartIdx = j;
+                }
+                if (distToEnd < minEndDist) {
+                  minEndDist = distToEnd;
+                  closestEndIdx = j;
+                }
+              }
+
+              // Вычисляем общее расстояние
+              const totalDist = minStartDist + minEndDist;
+              const maxDist = Math.max(minStartDist, minEndDist);
+
+              // Выбираем водный путь, который:
+              // 1. Ближе всего к обеим точкам (минимальная сумма расстояний)
+              // 2. И хотя бы одна точка близко (в пределах MAX_DISTANCE_TO_WATERWAY)
+              // 3. И максимальное расстояние не слишком большое (не более 2x MAX_DISTANCE_TO_WATERWAY)
+              // 4. И индексы разные (иначе маршрут не будет построен)
+              if (
+                (minStartDist <= MAX_DISTANCE_TO_WATERWAY ||
+                  minEndDist <= MAX_DISTANCE_TO_WATERWAY) &&
+                maxDist <= MAX_DISTANCE_TO_WATERWAY * 2 &&
+                closestStartIdx !== closestEndIdx // Критично: индексы должны быть разные!
+              ) {
+                // Выбираем водный путь, который ближе всего к обеим точкам
+                if (totalDist < minTotalDist) {
+                  minTotalDist = totalDist;
+                  bestWay = way;
+                  bestStartIdx = closestStartIdx;
+                  bestEndIdx = closestEndIdx;
+                }
+              }
+            }
+          }
+
+          // Если не нашли в пределах ограничений, попробуем найти самый близкий (но не слишком далеко)
+          if (!bestWay) {
+            const MAX_FALLBACK_DISTANCE = 50.0; // Максимальное расстояние для fallback поиска
+            console.log(
+              `[RIVER] Не найдено водных путей в пределах ${MAX_DISTANCE_TO_WATERWAY} км, ищем ближайший (макс. ${MAX_FALLBACK_DISTANCE} км)...`
+            );
+            minTotalDist = Infinity;
+
+            // Используем уже отфильтрованные водные пути для fallback поиска
+            for (const way of filteredWaterways) {
+              if (way.geometry && way.geometry.length > 1) {
+                let closestStartIdx = -1;
+                let closestEndIdx = -1;
+                let minStartDist = Infinity;
+                let minEndDist = Infinity;
+
+                for (let j = 0; j < way.geometry.length; j++) {
+                  const geom = way.geometry[j];
+                  const distToStart = haversineKm(start, {
+                    latitude: geom.lat,
+                    longitude: geom.lon,
+                  });
+                  const distToEnd = haversineKm(end, {
+                    latitude: geom.lat,
+                    longitude: geom.lon,
+                  });
+
+                  if (distToStart < minStartDist) {
+                    minStartDist = distToStart;
+                    closestStartIdx = j;
+                  }
+                  if (distToEnd < minEndDist) {
+                    minEndDist = distToEnd;
+                    closestEndIdx = j;
+                  }
+                }
+
+                // Проверяем, что водный путь не слишком далеко и индексы разные
+                const maxDist = Math.max(minStartDist, minEndDist);
+                if (
+                  maxDist <= MAX_FALLBACK_DISTANCE &&
+                  closestStartIdx !== closestEndIdx
+                ) {
+                  const totalDist = minStartDist + minEndDist;
+                  if (totalDist < minTotalDist) {
+                    minTotalDist = totalDist;
+                    bestWay = way;
+                    bestStartIdx = closestStartIdx;
+                    bestEndIdx = closestEndIdx;
+                  }
+                }
+              }
+            }
+
+            if (bestWay) {
+              const foundStartDist = haversineKm(start, {
+                latitude: bestWay.geometry[bestStartIdx].lat,
+                longitude: bestWay.geometry[bestStartIdx].lon,
+              });
+              const foundEndDist = haversineKm(end, {
+                latitude: bestWay.geometry[bestEndIdx].lat,
+                longitude: bestWay.geometry[bestEndIdx].lon,
+              });
+              console.log(
+                `[RIVER] Найден ближайший водный путь: расстояние до начала: ${foundStartDist.toFixed(
+                  2
+                )} км, до конца: ${foundEndDist.toFixed(
+                  2
+                )} км, индексы: ${bestStartIdx} -> ${bestEndIdx}`
+              );
+            } else {
+              console.log(
+                `[RIVER] Не найдено подходящих водных путей даже в пределах ${MAX_FALLBACK_DISTANCE} км`
+              );
+            }
+          }
+
+          // Если нашли подходящий водный путь, строим маршрут строго по его геометрии
+          // Важно: индексы должны быть разные, иначе маршрут не будет построен
+          if (
+            bestWay &&
+            bestWay.geometry &&
+            bestWay.geometry.length > 1 &&
+            bestStartIdx >= 0 &&
+            bestEndIdx >= 0 &&
+            bestStartIdx !== bestEndIdx // Критично: индексы должны быть разные!
+          ) {
+            // Вычисляем расстояния для лога
+            const logStartDist = haversineKm(start, {
+              latitude: bestWay.geometry[bestStartIdx].lat,
+              longitude: bestWay.geometry[bestStartIdx].lon,
+            });
+            const logEndDist = haversineKm(end, {
+              latitude: bestWay.geometry[bestEndIdx].lat,
+              longitude: bestWay.geometry[bestEndIdx].lon,
+            });
+            console.log(
+              `[RIVER] Используем водный путь с ${
+                bestWay.geometry.length
+              } точками, индексы: ${bestStartIdx} -> ${bestEndIdx}, расстояние до начала: ${logStartDist.toFixed(
+                2
+              )} км, до конца: ${logEndDist.toFixed(2)} км`
+            );
+
+            // Добавляем начальную точку, если она не на водном пути
+            const startOnWaterway =
+              haversineKm(start, {
+                latitude: bestWay.geometry[bestStartIdx].lat,
+                longitude: bestWay.geometry[bestStartIdx].lon,
+              }) < 0.1;
+
+            if (!startOnWaterway) {
+              route.push(start);
+            }
+
+            // Добавляем точки водного пути между начальной и конечной точками
+            // Определяем правильное направление движения по водному пути
+            if (bestStartIdx < bestEndIdx) {
+              // Идем от startIdx к endIdx
+              for (let j = bestStartIdx; j <= bestEndIdx; j++) {
+                const geom = bestWay.geometry[j];
+                route.push({
+                  latitude: geom.lat,
+                  longitude: geom.lon,
+                });
+              }
+            } else {
+              // Идем от startIdx к endIdx в обратном направлении
+              for (let j = bestStartIdx; j >= bestEndIdx; j--) {
+                const geom = bestWay.geometry[j];
+                route.push({
+                  latitude: geom.lat,
+                  longitude: geom.lon,
+                });
+              }
+            }
+
+            // Добавляем конечную точку, если она не на водном пути
+            const endOnWaterway =
+              haversineKm(end, {
+                latitude: bestWay.geometry[bestEndIdx].lat,
+                longitude: bestWay.geometry[bestEndIdx].lon,
+              }) < 0.1;
+
+            if (!endOnWaterway) {
+              route.push(end);
+            }
+
+            console.log(
+              `[RIVER] Добавлено точек из водного пути для сегмента ${
+                i + 1
+              } (всего в маршруте: ${route.length})`
+            );
+            foundWaterway = true;
+          } else {
+            // Логируем информацию о найденных водных путях для отладки
+            if (waterways.length > 0) {
+              console.log(
+                `[RIVER] Найдено ${
+                  waterways.length
+                } водных путей, но ни один не подходит для сегмента ${
+                  i + 1
+                } (требуется расстояние <= ${MAX_DISTANCE_TO_WATERWAY} км от обеих точек)`
+              );
+              // Показываем расстояния до ближайших водных путей
+              for (let w = 0; w < Math.min(3, waterways.length); w++) {
+                const way = waterways[w];
+                if (way.geometry && way.geometry.length > 0) {
+                  let minStartDist = Infinity;
+                  let minEndDist = Infinity;
+                  for (const geom of way.geometry) {
+                    const distToStart = haversineKm(start, {
+                      latitude: geom.lat,
+                      longitude: geom.lon,
+                    });
+                    const distToEnd = haversineKm(end, {
+                      latitude: geom.lat,
+                      longitude: geom.lon,
+                    });
+                    if (distToStart < minStartDist) minStartDist = distToStart;
+                    if (distToEnd < minEndDist) minEndDist = distToEnd;
+                  }
+                  console.log(
+                    `[RIVER] Водный путь ${
+                      w + 1
+                    }: расстояние до начала: ${minStartDist.toFixed(
+                      2
+                    )} км, до конца: ${minEndDist.toFixed(2)} км`
+                  );
+                }
+              }
+            } else {
+              console.log(
+                `[RIVER] Не найден подходящий водный путь для сегмента ${
+                  i + 1
+                } (требуется расстояние <= ${MAX_DISTANCE_TO_WATERWAY} км)`
+              );
+            }
+          }
+        } else {
+          console.log(
+            `[RIVER] Водные пути не найдены в области для сегмента ${i + 1}`
+          );
+        }
+      } else {
+        console.log(
+          `[RIVER] Не удалось получить данные от Overpass API для сегмента ${
+            i + 1
+          }`
+        );
+        if (lastError) {
+          console.log("[RIVER] Последняя ошибка:", lastError);
+        }
+      }
+
+      // Если не нашли водный путь для этого сегмента, возвращаем null
+      if (!foundWaterway) {
+        console.log(
+          `[RIVER] Не удалось найти водный путь для сегмента ${
+            i + 1
+          }, маршрут не может быть построен`
+        );
+        return null;
+      }
+    }
+
+    console.log(`[RIVER] Маршрут построен: ${route.length} точек`);
+    return route.length > 0 ? route : null;
+  } catch (error) {
+    console.error("[RIVER] Error building river route:", error);
+    return null;
+  }
+}
+
 export default function HomeScreen() {
   const [location, setLocation] = useState<Location.LocationObject | null>(
     null
@@ -74,6 +513,7 @@ export default function HomeScreen() {
   const [routePolyline, setRoutePolyline] = useState<LatLng[] | null>(null);
   const [routeMode, setRouteMode] = useState(false);
   const [roadRouting, setRoadRouting] = useState(false);
+  const [riverRouting, setRiverRouting] = useState(false);
   const [routingLoading, setRoutingLoading] = useState(false);
   const [searchVisible, setSearchVisible] = useState(false);
   const [centeredToUser, setCenteredToUser] = useState(false);
@@ -93,8 +533,27 @@ export default function HomeScreen() {
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
   const [startDateObj, setStartDateObj] = useState(new Date());
   const [endDateObj, setEndDateObj] = useState(new Date());
+  const [mapRegion, setMapRegion] = useState<any>(null);
   const searchRef = useRef<PlaceSearchHandle>(null);
   const mapRef = useRef<MapView>(null);
+
+  // Получаем настройку отображения километража из store
+  const [showDistanceMarkers, setShowDistanceMarkers] = useState(false);
+
+  // Синхронизируем состояние с настройками из store при монтировании и при фокусе экрана
+  useEffect(() => {
+    const settings = getSettings();
+    setShowDistanceMarkers(settings.showDistanceOnRoute ?? false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      // Синхронизируем настройки при возврате на экран
+      clearSettingsCache();
+      const settings = getSettings();
+      setShowDistanceMarkers(settings.showDistanceOnRoute ?? false);
+    }, [])
+  );
 
   const tourismTypes = [
     "пеший",
@@ -138,21 +597,62 @@ export default function HomeScreen() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!roadRouting || waypoints.length < 2) {
+      if ((!roadRouting && !riverRouting) || waypoints.length < 2) {
         setRoutePolyline(null);
         return;
       }
       setRoutingLoading(true);
-      const poly = await fetchRoadRoute(waypoints);
+      let poly: LatLng[] | null = null;
+      if (riverRouting) {
+        console.log(
+          "[RIVER] Начинаем построение маршрута по реке для",
+          waypoints.length,
+          "точек"
+        );
+        try {
+          poly = await fetchRiverRoute(waypoints);
+          console.log(
+            "[RIVER] Результат построения маршрута:",
+            poly ? `${poly.length} точек` : "null"
+          );
+          if (!poly) {
+            console.log(
+              "[RIVER] Маршрут не построен - река не найдена в указанной области"
+            );
+          }
+        } catch (error) {
+          console.error("[RIVER] Ошибка при построении маршрута:", error);
+        }
+      } else if (roadRouting) {
+        poly = await fetchRoadRoute(waypoints);
+      }
       if (!cancelled) {
         setRoutePolyline(poly);
         setRoutingLoading(false);
+        if (riverRouting) {
+          console.log(
+            "[RIVER] Маршрут установлен на карту:",
+            poly ? `${poly.length} точек` : "null"
+          );
+          if (poly && poly.length > 0) {
+            console.log("[RIVER] Первая точка маршрута:", poly[0]);
+            console.log(
+              "[RIVER] Последняя точка маршрута:",
+              poly[poly.length - 1]
+            );
+            console.log("[RIVER] riverRouting:", riverRouting);
+            console.log(
+              "[RIVER] routePolyline будет отображен:",
+              poly !== null
+            );
+          }
+        }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [roadRouting, waypoints]);
+  }, [roadRouting, riverRouting, waypoints]);
 
   const onSelectPlace = (p: PlaceResult) => {
     const lat = parseFloat(p.lat);
@@ -201,15 +701,21 @@ export default function HomeScreen() {
   };
 
   const totalKm = useMemo(() => {
-    const pts = roadRouting && routePolyline ? routePolyline : waypoints;
+    const pts =
+      (roadRouting || riverRouting) && routePolyline
+        ? routePolyline
+        : waypoints;
     if (pts.length < 2) return 0;
     let sum = 0;
     for (let i = 1; i < pts.length; i++) sum += haversineKm(pts[i - 1], pts[i]);
     return sum;
-  }, [waypoints, routePolyline, roadRouting]);
+  }, [waypoints, routePolyline, roadRouting, riverRouting]);
 
   const handleAnalyzePress = () => {
-    if ((roadRouting && routePolyline?.length) || waypoints.length >= 2) {
+    if (
+      ((roadRouting || riverRouting) && routePolyline?.length) ||
+      waypoints.length >= 2
+    ) {
       setAnalyzeOpen(true);
     }
   };
@@ -219,6 +725,7 @@ export default function HomeScreen() {
     setRoutePolyline(null);
     setRouteMode(false);
     setRoadRouting(false);
+    setRiverRouting(false);
     setInfoOpen(false);
     clearCurrentRoute();
     clearAnalysisResult();
@@ -231,7 +738,9 @@ export default function HomeScreen() {
       setLoadingProgress(0);
 
       const basePoints =
-        roadRouting && routePolyline ? routePolyline : waypoints;
+        (roadRouting || riverRouting) && routePolyline
+          ? routePolyline
+          : waypoints;
       const pts = basePoints.map((p) => ({
         lat: p.latitude,
         lng: p.longitude,
@@ -263,6 +772,15 @@ export default function HomeScreen() {
       setLoadingStep(3);
       setLoadingProgress(70);
 
+      // Загружаем настройки для передачи на бэкенд
+      const { getSettings, clearSettingsCache } = await import(
+        "../../../store/settingsStore"
+      );
+      // Сбрасываем кэш, чтобы получить актуальные настройки
+      clearSettingsCache();
+      const settings = getSettings();
+      console.log("[Home ANALYZE] Используемые настройки:", settings);
+
       const body = {
         coordinates: coords,
         lengthKm,
@@ -272,6 +790,9 @@ export default function HomeScreen() {
         startDate,
         endDate,
         elevationData: elevations,
+        pointsPerDay: settings.pointsPerDay,
+        usePointsSystem: settings.usePointsSystem,
+        includeAIRecommendations: settings.includeAIRecommendations,
       };
       const url = getApiUrl(API_CONFIG.ENDPOINTS.ANALYZE_ROUTE);
       console.error("[ANALYZE] POST", url, "payload points:", pts.length, body);
@@ -279,6 +800,22 @@ export default function HomeScreen() {
         API_CONFIG.ENDPOINTS.ANALYZE_ROUTE,
         body
       );
+
+      // Логирование для проверки данных от ИИ
+      console.log("[Home ANALYZE] Response received:", {
+        hasAnalysis: !!result.analysis,
+        hasAnalysisStructured: !!result.analysisStructured,
+        analysisStructuredKeys: result.analysisStructured
+          ? Object.keys(result.analysisStructured)
+          : null,
+        summary: result.analysisStructured?.summary,
+        stats: result.analysisStructured?.stats,
+        geography: result.analysisStructured?.geography,
+        days: result.analysisStructured?.days?.length || 0,
+        recommendations:
+          result.analysisStructured?.recommendations?.length || 0,
+        warnings: result.analysisStructured?.warnings?.length || 0,
+      });
 
       // Step 5: Формирование отчета (0.5 сек)
       setLoadingStep(4);
@@ -360,7 +897,10 @@ export default function HomeScreen() {
   }, [elevation]);
 
   const info = useMemo(() => {
-    const pts = roadRouting && routePolyline ? routePolyline : waypoints;
+    const pts =
+      (roadRouting || riverRouting) && routePolyline
+        ? routePolyline
+        : waypoints;
     if (pts.length < 2) return null;
     let minLat = Infinity,
       minLon = Infinity,
@@ -377,13 +917,85 @@ export default function HomeScreen() {
       bbox: { minLat, minLon, maxLat, maxLon },
       lengthKm: totalKm,
     };
-  }, [roadRouting, routePolyline, waypoints, totalKm]);
+  }, [roadRouting, riverRouting, routePolyline, waypoints, totalKm]);
 
   const handleGetElevation = async (points: LatLng[]) => {
     const data = await getElevationData(points);
     console.log(data);
 
     setElevation(data);
+  };
+
+  // Функция для вычисления интервала отображения километража в зависимости от масштаба
+  const getDistanceInterval = (longitudeDelta: number): number => {
+    // Вычисляем примерную ширину видимой области в километрах
+    // longitudeDelta в градусах, примерно 111 км на градус на экваторе
+    const visibleWidthKm =
+      longitudeDelta *
+      111 *
+      Math.cos(((mapRegion?.latitude || 55) * Math.PI) / 180);
+
+    if (visibleWidthKm <= 10) return 1; // Каждые 1 км
+    if (visibleWidthKm <= 50) return 10; // Каждые 10 км
+    if (visibleWidthKm <= 100) return 50; // Каждые 50 км
+    return 100; // Каждые 100 км
+  };
+
+  // Функция для вычисления точек с километражем на маршруте
+  const getDistanceMarkers = useMemo(() => {
+    if (!showDistanceMarkers) return [];
+
+    const pts =
+      (roadRouting || riverRouting) && routePolyline
+        ? routePolyline
+        : waypoints;
+    if (pts.length < 2 || !mapRegion) return [];
+
+    const interval = getDistanceInterval(mapRegion.longitudeDelta || 0.1);
+    const markers: Array<{ coordinate: LatLng; distance: number }> = [];
+    let accumulatedDistance = 0;
+
+    for (let i = 1; i < pts.length; i++) {
+      const segmentDistance = haversineKm(pts[i - 1], pts[i]);
+      const prevAccumulated = accumulatedDistance;
+      accumulatedDistance += segmentDistance;
+
+      // Проверяем, нужно ли добавить маркер в этом сегменте
+      const prevMarker = Math.floor(prevAccumulated / interval);
+      const currentMarker = Math.floor(accumulatedDistance / interval);
+
+      if (currentMarker > prevMarker) {
+        // Вычисляем позицию маркера на сегменте
+        const targetDistance = currentMarker * interval;
+        const distanceInSegment = targetDistance - prevAccumulated;
+        const ratio = distanceInSegment / segmentDistance;
+
+        markers.push({
+          coordinate: {
+            latitude:
+              pts[i - 1].latitude +
+              (pts[i].latitude - pts[i - 1].latitude) * ratio,
+            longitude:
+              pts[i - 1].longitude +
+              (pts[i].longitude - pts[i - 1].longitude) * ratio,
+          },
+          distance: targetDistance,
+        });
+      }
+    }
+
+    return markers;
+  }, [
+    waypoints,
+    routePolyline,
+    roadRouting,
+    riverRouting,
+    mapRegion,
+    showDistanceMarkers,
+  ]);
+
+  const handleRegionChange = (region: any) => {
+    setMapRegion(region);
   };
 
   useEffect(() => {
@@ -423,7 +1035,13 @@ export default function HomeScreen() {
           <Ionicons name="add" size={18} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
-          onPress={() => setRoadRouting((v) => !v)}
+          onPress={() => {
+            setRoadRouting((v) => {
+              if (v) return false;
+              setRiverRouting(false);
+              return true;
+            });
+          }}
           activeOpacity={0.9}
           style={[
             styles.roadRoutingButton,
@@ -431,6 +1049,43 @@ export default function HomeScreen() {
           ]}
         >
           <Ionicons name="navigate" size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => {
+            setRiverRouting((v) => {
+              if (v) return false;
+              setRoadRouting(false);
+              return true;
+            });
+          }}
+          activeOpacity={0.9}
+          style={[
+            styles.roadRoutingButton,
+            riverRouting && { backgroundColor: "#007AFF" },
+          ]}
+        >
+          <Ionicons name="water" size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={async () => {
+            const newValue = !showDistanceMarkers;
+            setShowDistanceMarkers(newValue);
+            // Обновляем настройку в store
+            const currentSettings = getSettings();
+            const updatedSettings = {
+              ...currentSettings,
+              showDistanceOnRoute: newValue,
+            };
+            await saveSettings(updatedSettings);
+            clearSettingsCache();
+          }}
+          activeOpacity={0.9}
+          style={[
+            styles.roadRoutingButton,
+            showDistanceMarkers && { backgroundColor: "#FF9500" },
+          ]}
+        >
+          <Ionicons name="location" size={18} color="#fff" />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={handleResetRoute}
@@ -453,6 +1108,7 @@ export default function HomeScreen() {
           onUserLocationChange={handleUserLocationChange}
           onPress={handleMapPress}
           onPanDrag={dismissSearch}
+          onRegionChangeComplete={handleRegionChange}
         >
           {waypoints.map((pt, idx) => (
             <Marker
@@ -461,7 +1117,7 @@ export default function HomeScreen() {
               title={`Точка ${idx + 1}`}
             />
           ))}
-          {!roadRouting && waypoints.length >= 2 && (
+          {!roadRouting && !riverRouting && waypoints.length >= 2 && (
             <Polyline
               coordinates={waypoints}
               strokeColor="#007AFF"
@@ -479,12 +1135,55 @@ export default function HomeScreen() {
               onPress={handleAnalyzePress}
             />
           )}
+          {riverRouting && routePolyline && routePolyline.length > 0 && (
+            <>
+              {console.log("[RIVER] Отрисовка маршрута на карте:", {
+                points: routePolyline.length,
+                first: routePolyline[0],
+                last: routePolyline[routePolyline.length - 1],
+                riverRouting,
+                hasRoutePolyline: !!routePolyline,
+              })}
+              <Polyline
+                coordinates={routePolyline}
+                strokeColor="#007AFF"
+                strokeWidth={8}
+                tappable
+                onPress={handleAnalyzePress}
+              />
+              {/* Добавляем маркеры в начале и конце маршрута для визуальной проверки */}
+              <Marker
+                coordinate={routePolyline[0]}
+                title="Начало маршрута по реке"
+                pinColor="blue"
+              />
+              <Marker
+                coordinate={routePolyline[routePolyline.length - 1]}
+                title="Конец маршрута по реке"
+                pinColor="blue"
+              />
+            </>
+          )}
+          {/* Маркеры с километражем */}
+          {getDistanceMarkers.map((marker, idx) => (
+            <Marker
+              key={`distance-${idx}-${marker.distance}`}
+              coordinate={marker.coordinate}
+              anchor={{ x: 0.5, y: 0.5 }}
+            >
+              <View style={styles.distanceMarkerContainer}>
+                <Text style={styles.distanceMarkerText}>
+                  {marker.distance.toFixed(0)} км
+                </Text>
+              </View>
+            </Marker>
+          ))}
         </MapView>
       )}
 
-      {routingLoading && roadRouting && (
+      {routingLoading && (roadRouting || riverRouting) && (
         <View style={styles.routingIndicatorContainer}>
-          <ActivityIndicator color="#34C759" />
+          <ActivityIndicator color={riverRouting ? "#007AFF" : "#34C759"} />
         </View>
       )}
 
@@ -533,10 +1232,13 @@ export default function HomeScreen() {
                 <Text style={styles.formLabel}>Информация о маршруте</Text>
                 <Text style={{ color: "#666", marginBottom: 8 }}>
                   Точек:{" "}
-                  {roadRouting && routePolyline
+                  {(roadRouting || riverRouting) && routePolyline
                     ? routePolyline.length
                     : waypoints.length}{" "}
                   • Длина: {totalKm.toFixed(2)} км
+                  {(riverRouting && " • По реке") ||
+                    (roadRouting && " • По дорогам") ||
+                    ""}
                 </Text>
               </View>
 
@@ -632,6 +1334,26 @@ export default function HomeScreen() {
                     </TouchableOpacity>
                   </View>
                 </View>
+                {(() => {
+                  const start = new Date(startDate);
+                  const end = new Date(endDate);
+                  const diffTime = Math.abs(end.getTime() - start.getTime());
+                  const diffDays =
+                    Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+                  return (
+                    <Text
+                      style={{
+                        fontSize: 12,
+                        color: "#007AFF",
+                        marginTop: 8,
+                        fontWeight: "600",
+                      }}
+                    >
+                      📅 Продолжительность: {diffDays}{" "}
+                      {diffDays === 1 ? "день" : diffDays < 5 ? "дня" : "дней"}
+                    </Text>
+                  );
+                })()}
                 <Text style={{ fontSize: 12, color: "#999", marginTop: 4 }}>
                   Нажмите для выбора даты
                 </Text>
@@ -769,7 +1491,11 @@ export default function HomeScreen() {
                     <View style={styles.infoRow}>
                       <Text style={styles.infoLabel}>Тип маршрута:</Text>
                       <Text style={styles.infoValue}>
-                        {roadRouting ? "По дорогам" : "Прямая линия"}
+                        {riverRouting
+                          ? "По реке"
+                          : roadRouting
+                          ? "По дорогам"
+                          : "Прямая линия"}
                       </Text>
                     </View>
                   </View>
@@ -861,6 +1587,7 @@ export default function HomeScreen() {
                         setCurrentRoute({
                           points: info.points,
                           roadRouting,
+                          riverRouting,
                           lengthKm: info.lengthKm,
                         });
                       }

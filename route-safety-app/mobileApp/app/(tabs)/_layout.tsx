@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { BlurView } from "expo-blur";
+import { TouchableOpacity, StyleSheet } from "react-native";
 
 export default function TabLayout() {
   return (
@@ -34,6 +35,13 @@ export default function TabLayout() {
           paddingVertical: 20,
           overflow: "hidden",
         },
+        tabBarButton: (props) => (
+          <TouchableOpacity
+            {...props}
+            style={[props.style, styles.tabBarButton]}
+            activeOpacity={0.7}
+          />
+        ),
         tabBarBackground: () => (
           <BlurView intensity={40} tint="dark" style={{ flex: 1 }} />
         ),
@@ -90,3 +98,14 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  tabBarButton: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 65,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+  },
+});

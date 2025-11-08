@@ -282,4 +282,23 @@ export const styles = StyleSheet.create({
     color: "#666",
     fontFamily: "monospace",
   },
+  distanceMarkerContainer: {
+    backgroundColor: "rgba(0, 122, 255, 0.9)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: "#fff",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  distanceMarkerText: {
+    color: "#fff",
+    fontSize: 11,
+    fontWeight: "700",
+    textAlign: "center",
+  },
 });

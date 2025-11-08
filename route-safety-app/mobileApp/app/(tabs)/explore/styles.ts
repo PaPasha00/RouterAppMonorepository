@@ -115,31 +115,75 @@ export const styles = StyleSheet.create({
     color: "#495057",
     fontWeight: "500",
   },
-  weatherContainer: {
-    marginTop: 8,
+  weatherCard: {
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#E0E8F0",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  weatherMain: {
+  weatherHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 12,
   },
+  weatherIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  weatherEmoji: {
+    fontSize: 36,
+  },
+  weatherMainInfo: {
+    flex: 1,
+  },
   weatherTemp: {
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 26,
+    fontWeight: "700",
     color: "#1a1a1a",
+    marginBottom: 6,
+    letterSpacing: 0.5,
   },
   weatherConditions: {
-    fontSize: 14,
-    color: "#666",
-    fontWeight: "500",
+    fontSize: 15,
+    color: "#555",
+    fontWeight: "600",
+    textTransform: "capitalize",
   },
-  weatherDetails: {
-    gap: 4,
+  weatherDetailsRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#E0E8F0",
   },
-  weatherDetail: {
-    fontSize: 14,
+  weatherDetailItem: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  weatherDetailIcon: {
+    fontSize: 20,
+  },
+  weatherDetailText: {
+    fontSize: 15,
     color: "#4a4a4a",
+    fontWeight: "600",
+    marginLeft: 4,
   },
   recommendationsList: {
     gap: 8,

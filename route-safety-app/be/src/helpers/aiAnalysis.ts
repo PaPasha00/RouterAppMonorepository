@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { RouteAnalysisRequest, RouteGeometryAnalysis, GeographicContext } from '../types';
+import { RouteAnalysisRequest, RouteGeometryAnalysis, GeographicContext, DailyRoute } from '../types';
 
 /**
  * Генерирует промпт для анализа маршрута ИИ в формате JSON
@@ -9,7 +9,8 @@ export function generateAnalysisPrompt(
   terrainType: string,
   geographicContext: GeographicContext,
   formattedGeoContext: string,
-  routeAnalysis: RouteGeometryAnalysis
+  routeAnalysis: RouteGeometryAnalysis,
+  dailyRoutes?: DailyRoute[]
 ): string {
   const startDate = new Date(request.startDate);
   const endDate = new Date(request.endDate);
@@ -59,6 +60,48 @@ export function generateAnalysisPrompt(
     warnings: "string[]",
   };
 
+  // Формируем информацию о погоде по дням (ограничиваем до 20 дней для промпта)
+  let weatherInfo = '';
+  if (dailyRoutes && dailyRoutes.length > 0) {
+    const maxDaysForPrompt = 20; // Ограничиваем для промпта, чтобы не перегружать
+    const routesToShow = dailyRoutes.slice(0, maxDaysForPrompt);
+    const remainingDays = dailyRoutes.length - maxDaysForPrompt;
+    
+    weatherInfo = '\n\nПРОГНОЗ ПОГОДЫ ПО ДНЯМ (реальные данные):\n';
+    routesToShow.forEach((day) => {
+      weatherInfo += `День ${day.day} (${day.date}): `;
+      weatherInfo += `температура ${day.weather.temperature.min}°-${day.weather.temperature.max}°, `;
+      weatherInfo += `${day.weather.conditions}, `;
+      weatherInfo += `ветер ${day.weather.windSpeed} м/с, `;
+      weatherInfo += `осадки ${day.weather.precipitation} мм. `;
+      weatherInfo += `Дистанция: ${day.distance.toFixed(2)} км, набор высоты: ${day.elevationGain} м\n`;
+    });
+    
+    if (remainingDays > 0) {
+      weatherInfo += `\n... и еще ${remainingDays} дней (погода аналогична, используй данные из первых дней как образец)\n`;
+    }
+  }
+
+  const includeRecommendations = request.includeAIRecommendations !== false; // По умолчанию true
+  
+  let recommendationsNote = '';
+  if (!includeRecommendations) {
+    recommendationsNote = '\n\nВАЖНО: Пользователь НЕ хочет получать рекомендации. Оставь поле recommendations пустым массивом [] в summary и в каждом дне.';
+    console.log('🔕 Рекомендации ИИ отключены пользователем - промпт изменен');
+    console.log('📝 Добавлена инструкция в промпт: "Оставь поле recommendations пустым массивом []"');
+  } else {
+    recommendationsNote = '\n\nВАЖНО: Обязательно заполни поле recommendations полезными рекомендациями для этого маршрута. Для длинных и сложных маршрутов дай детальные рекомендации по экипировке, безопасности, питанию, ночевкам и другим важным аспектам. В каждом дне также добавь рекомендации, если они уместны.';
+    console.log('✅ Рекомендации ИИ включены - будут включены в ответ');
+    console.log('📝 Добавлена инструкция в промпт: "Обязательно заполни поле recommendations"');
+  }
+  
+  console.log(`⚙️ Параметр includeAIRecommendations из запроса: ${request.includeAIRecommendations} (обработано как: ${includeRecommendations})`);
+  
+  // Логируем часть промпта с рекомендациями для проверки
+  if (recommendationsNote) {
+    console.log('📋 Фрагмент промпта с инструкцией о рекомендациях:', recommendationsNote.substring(0, 100) + '...');
+  }
+
   return `
 Ты — эксперт по походам. Верни строго JSON без какого-либо текста до или после JSON. Никаких комментариев, пояснений или маркдауна. Если чего-то не хватает в данных — ставь null или пустые поля, но сохраняй форму.
 
@@ -77,7 +120,9 @@ ${JSON.stringify(jsonSchema, null, 2)}
 - Даты: ${request.startDate} - ${request.endDate} (${totalDays} дн.)
 - Уклон ср: ${routeAnalysis.avgSlope.toFixed(1)}%, макс: ${routeAnalysis.maxSlope.toFixed(1)}%
 - Извилистость: ${routeAnalysis.sinuosity.toFixed(2)}
-- Высоты: мин ${routeAnalysis.minElevation}м, макс ${routeAnalysis.maxElevation}м, перепад ${routeAnalysis.maxElevation - routeAnalysis.minElevation}м
+- Высоты: мин ${routeAnalysis.minElevation}м, макс ${routeAnalysis.maxElevation}м, перепад ${routeAnalysis.maxElevation - routeAnalysis.minElevation}м${weatherInfo}${recommendationsNote}
+
+ВАЖНО: Используй РЕАЛЬНЫЕ данные о погоде из раздела "ПРОГНОЗ ПОГОДЫ ПО ДНЯМ" для заполнения поля weather в массиве days. Не придумывай погоду, используй только предоставленные данные.
 
 Верни ТОЛЬКО валидный JSON по указанной схеме.
   `;
@@ -103,7 +148,7 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
           { role: 'system', content: 'Отвечай строго валидным JSON. Никакого текста вне JSON.' },
           { role: 'user', content: prompt },
         ],
-        max_tokens: 4000,
+        max_tokens: 6000, // Увеличено для больших ответов с данными по дням
         temperature: 0.4,
         response_format: { type: 'json_object' },
       },
@@ -116,17 +161,49 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
       }
     );
 
-    const content: string = response.data.choices[0].message.content?.trim() || '';
+    let content: string = response.data.choices[0].message.content?.trim() || '';
+
+    // Удаляем markdown код блоки, если они есть
+    content = content.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '').trim();
 
     let parsed: any | undefined = undefined;
     try {
       parsed = JSON.parse(content);
-    } catch {
-      // Если вдруг вернулся нестрогий JSON
-      parsed = undefined;
+      console.log('✅ JSON успешно распарсен');
+    } catch (parseError: any) {
+      // Если вдруг вернулся нестрогий JSON, пытаемся найти JSON в тексте
+      console.log('⚠️ Прямой парсинг не удался, пытаемся найти JSON в тексте...');
+      console.log('Первые 200 символов ответа:', content.substring(0, 200));
+      
+      // Пытаемся найти JSON объект в тексте (между { и })
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsed = JSON.parse(jsonMatch[0]);
+          console.log('✅ JSON найден и распарсен из текста');
+        } catch (e) {
+          console.error('❌ Не удалось распарсить найденный JSON:', e);
+          parsed = undefined;
+        }
+      } else {
+        console.error('❌ JSON объект не найден в ответе');
+        parsed = undefined;
+      }
     }
 
-    console.log('✅ Ответ ИИ получен');
+    console.log('✅ Ответ ИИ получен', {
+      hasText: !!content,
+      hasJson: !!parsed,
+      contentLength: content.length,
+      jsonKeys: parsed ? Object.keys(parsed) : null,
+      firstChars: content.substring(0, 100),
+      lastChars: content.substring(Math.max(0, content.length - 100)),
+    });
+    
+    if (!parsed) {
+      console.error('❌ JSON не распарсился! Содержимое ответа:');
+      console.error(content);
+    }
     return { text: content, json: parsed };
   } catch (error: any) {
     const status = error?.response?.status;

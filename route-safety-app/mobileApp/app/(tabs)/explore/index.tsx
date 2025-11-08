@@ -22,6 +22,47 @@ import { useMemo, useState } from "react";
 import { API_CONFIG, getApiUrl, apiPost } from "../../../config/api";
 import { getElevationData } from "../home/helpers";
 
+// Функция для получения эмодзи по условиям погоды
+function getWeatherEmoji(conditions: string): string {
+  const cond = conditions.toLowerCase();
+  if (cond.includes("ясно") || cond.includes("солнечно")) return "☀️";
+  if (cond.includes("в основном ясно")) return "🌤️";
+  if (cond.includes("частично облачно")) return "⛅";
+  if (cond.includes("пасмурно") || cond.includes("облачно")) return "☁️";
+  if (cond.includes("туман") || cond.includes("изморозь")) return "🌫️";
+  if (cond.includes("морось")) return "🌦️";
+  if (cond.includes("дождь") || cond.includes("ливень")) return "🌧️";
+  if (cond.includes("снег")) return "❄️";
+  if (cond.includes("гроза")) return "⛈️";
+  if (cond.includes("град")) return "🌨️";
+  return "🌤️";
+}
+
+// Функция для получения эмодзи ветра по скорости
+function getWindEmoji(windSpeed: number): string {
+  if (windSpeed >= 15) return "💨"; // Сильный ветер
+  if (windSpeed >= 10) return "🌬️"; // Умеренный ветер
+  return "🍃"; // Легкий ветер
+}
+
+// Функция для получения эмодзи осадков
+function getPrecipitationEmoji(precipitation: number): string {
+  if (precipitation >= 10) return "🌧️"; // Сильные осадки
+  if (precipitation >= 5) return "🌦️"; // Умеренные осадки
+  if (precipitation > 0) return "💧"; // Легкие осадки
+  return "☀️"; // Без осадков
+}
+
+// Функция для получения цвета фона по температуре
+function getTemperatureColor(min: number, max: number): string {
+  const avg = (min + max) / 2;
+  if (avg >= 25) return "#FF6B6B"; // Жарко - красный
+  if (avg >= 15) return "#4ECDC4"; // Тепло - бирюзовый
+  if (avg >= 5) return "#95E1D3"; // Прохладно - светло-бирюзовый
+  if (avg >= -5) return "#A8E6CF"; // Холодно - светло-зеленый
+  return "#B8D4F0"; // Очень холодно - светло-голубой
+}
+
 export default function ExploreScreen() {
   const [refreshKey, setRefreshKey] = useState(0);
   const existing = getAnalysisResult();
@@ -118,6 +159,15 @@ export default function ExploreScreen() {
       );
       const lengthKm = route.lengthKm;
 
+      // Загружаем настройки для передачи на бэкенд
+      const { getSettings, clearSettingsCache } = await import(
+        "../../../store/settingsStore"
+      );
+      // Сбрасываем кэш, чтобы получить актуальные настройки
+      clearSettingsCache();
+      const settings = getSettings();
+      console.log("[Explore ANALYZE] Используемые настройки:", settings);
+
       const body = {
         coordinates: coords,
         lengthKm,
@@ -127,6 +177,9 @@ export default function ExploreScreen() {
         startDate,
         endDate,
         elevationData: elevations,
+        pointsPerDay: settings.pointsPerDay,
+        usePointsSystem: settings.usePointsSystem,
+        includeAIRecommendations: settings.includeAIRecommendations,
       };
 
       const url = getApiUrl(API_CONFIG.ENDPOINTS.ANALYZE_ROUTE);
@@ -140,6 +193,29 @@ export default function ExploreScreen() {
         API_CONFIG.ENDPOINTS.ANALYZE_ROUTE,
         body
       );
+
+      // Логирование для проверки данных от ИИ
+      console.log("[Explore ANALYZE] Response received:", {
+        hasAnalysis: !!result.analysis,
+        hasAnalysisStructured: !!result.analysisStructured,
+        analysisStructuredKeys: result.analysisStructured
+          ? Object.keys(result.analysisStructured)
+          : null,
+        summary: result.analysisStructured?.summary,
+        stats: result.analysisStructured?.stats,
+        geography: result.analysisStructured?.geography,
+        days: result.analysisStructured?.days?.length || 0,
+        recommendations:
+          result.analysisStructured?.recommendations?.length || 0,
+        warnings: result.analysisStructured?.warnings?.length || 0,
+        dailyRoutes: result.dailyRoutes?.length || 0,
+        dailyRoutesWeather:
+          result.dailyRoutes?.map((d: any) => ({
+            day: d.day,
+            date: d.date,
+            weather: d.weather,
+          })) || [],
+      });
 
       setLoadingStep(4);
       setLoadingProgress(90);
@@ -178,7 +254,7 @@ export default function ExploreScreen() {
               </Text>
             ) : (
               <Text style={styles.note}>
-                Нет маршрута. Постройте его на вкладке Главная.
+                Нет маршрута. Постройте его на вкладке Главная и нажмите "i".
               </Text>
             )}
           </View>
@@ -246,6 +322,25 @@ export default function ExploreScreen() {
                 </TouchableOpacity>
               </View>
             </View>
+            {(() => {
+              const start = new Date(startDate);
+              const end = new Date(endDate);
+              const diffTime = Math.abs(end.getTime() - start.getTime());
+              const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+              return (
+                <Text
+                  style={{
+                    fontSize: 12,
+                    color: "#007AFF",
+                    marginTop: 8,
+                    fontWeight: "600",
+                  }}
+                >
+                  📅 Продолжительность: {diffDays}{" "}
+                  {diffDays === 1 ? "день" : diffDays < 5 ? "дня" : "дней"}
+                </Text>
+              );
+            })()}
             <Text style={{ fontSize: 12, color: "#999", marginTop: 4 }}>
               Нажмите для выбора даты
             </Text>
@@ -466,15 +561,86 @@ export default function ExploreScreen() {
                                   </Text>
                                 )}
                               </View>
-                              {d.weather && (
-                                <Text style={styles.cardText}>
-                                  Погода: {d.weather.temperatureMin}°–
-                                  {d.weather.temperatureMax}°,{" "}
-                                  {d.weather.conditions}, ветер{" "}
-                                  {d.weather.windSpeed} м/с, осадки{" "}
-                                  {d.weather.precipitation} мм
-                                </Text>
-                              )}
+                              {d.weather &&
+                                (() => {
+                                  const tempMin =
+                                    d.weather.temperature?.min ??
+                                    d.weather.temperatureMin ??
+                                    0;
+                                  const tempMax =
+                                    d.weather.temperature?.max ??
+                                    d.weather.temperatureMax ??
+                                    0;
+                                  const bgColor = getTemperatureColor(
+                                    tempMin,
+                                    tempMax
+                                  );
+
+                                  return (
+                                    <View
+                                      style={[
+                                        styles.weatherCard,
+                                        { backgroundColor: bgColor + "20" },
+                                      ]}
+                                    >
+                                      <View style={styles.weatherHeader}>
+                                        <View
+                                          style={[
+                                            styles.weatherIconContainer,
+                                            { backgroundColor: bgColor + "30" },
+                                          ]}
+                                        >
+                                          <Text style={styles.weatherEmoji}>
+                                            {getWeatherEmoji(
+                                              d.weather.conditions || ""
+                                            )}
+                                          </Text>
+                                        </View>
+                                        <View style={styles.weatherMainInfo}>
+                                          <Text style={styles.weatherTemp}>
+                                            {tempMin}° / {tempMax}°
+                                          </Text>
+                                          <Text
+                                            style={styles.weatherConditions}
+                                          >
+                                            {d.weather.conditions ||
+                                              "данные недоступны"}
+                                          </Text>
+                                        </View>
+                                      </View>
+                                      <View style={styles.weatherDetailsRow}>
+                                        <View style={styles.weatherDetailItem}>
+                                          <Text
+                                            style={styles.weatherDetailIcon}
+                                          >
+                                            {getWindEmoji(
+                                              d.weather.windSpeed || 0
+                                            )}
+                                          </Text>
+                                          <Text
+                                            style={styles.weatherDetailText}
+                                          >
+                                            {d.weather.windSpeed || 0} м/с
+                                          </Text>
+                                        </View>
+                                        <View style={styles.weatherDetailItem}>
+                                          <Text
+                                            style={styles.weatherDetailIcon}
+                                          >
+                                            {getPrecipitationEmoji(
+                                              d.weather.precipitation || 0
+                                            )}
+                                          </Text>
+                                          <Text
+                                            style={styles.weatherDetailText}
+                                          >
+                                            {d.weather.precipitation || 0} мм
+                                          </Text>
+                                        </View>
+                                      </View>
+                                    </View>
+                                  );
+                                })()}
                               {Array.isArray(d.keyPoints) &&
                                 d.keyPoints.length > 0 && (
                                   <Text style={styles.cardText}>
@@ -557,7 +723,33 @@ export default function ExploreScreen() {
                       </Text>
                     </TouchableOpacity>
                   </View>
-                  <Text style={styles.cardText}>{existing.analysis}</Text>
+                  <Text
+                    style={[
+                      styles.cardText,
+                      { fontFamily: "monospace", fontSize: 12 },
+                    ]}
+                  >
+                    {existing.analysis
+                      ? // Пытаемся распарсить JSON вручную для красивого отображения
+                        (() => {
+                          try {
+                            const json = JSON.parse(existing.analysis);
+                            return JSON.stringify(json, null, 2);
+                          } catch {
+                            return existing.analysis;
+                          }
+                        })()
+                      : "Анализ недоступен"}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.cardText,
+                      { marginTop: 8, fontSize: 11, color: "#999" },
+                    ]}
+                  >
+                    ⚠️ JSON не распарсился автоматически. Показывается сырой
+                    ответ.
+                  </Text>
                 </View>
               )}
             </>

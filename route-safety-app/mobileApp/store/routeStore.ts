@@ -3,6 +3,7 @@ export type LatLng = { latitude: number; longitude: number };
 export type CurrentRoute = {
   points: LatLng[];
   roadRouting: boolean;
+  riverRouting: boolean;
   lengthKm: number;
 } | null;
 
