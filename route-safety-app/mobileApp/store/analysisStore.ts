@@ -9,3 +9,7 @@ export function setAnalysisResult(result: AnalysisResult) {
 export function getAnalysisResult(): AnalysisResult | null {
   return lastAnalysis;
 }
+
+export function clearAnalysisResult() {
+  lastAnalysis = null;
+}

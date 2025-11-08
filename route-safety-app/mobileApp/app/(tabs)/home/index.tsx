@@ -31,6 +31,9 @@ import { apiPost, API_CONFIG, getApiUrl } from "../../../config/api";
 import { router } from "expo-router";
 import { setAnalysisResult } from "../../../store/analysisStore";
 import { getElevationData } from "./helpers";
+import { setCurrentRoute } from "../../../store/routeStore";
+import { clearCurrentRoute } from "../../../store/routeStore";
+import { clearAnalysisResult } from "../../../store/analysisStore";
 
 function haversineKm(a: LatLng, b: LatLng): number {
   const R = 6371;
@@ -209,6 +212,16 @@ export default function HomeScreen() {
     if ((roadRouting && routePolyline?.length) || waypoints.length >= 2) {
       setAnalyzeOpen(true);
     }
+  };
+
+  const handleResetRoute = () => {
+    setWaypoints([]);
+    setRoutePolyline(null);
+    setRouteMode(false);
+    setRoadRouting(false);
+    setInfoOpen(false);
+    clearCurrentRoute();
+    clearAnalysisResult();
   };
 
   const confirmAnalyze = async () => {
@@ -418,6 +431,13 @@ export default function HomeScreen() {
           ]}
         >
           <Ionicons name="navigate" size={18} color="#fff" />
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={handleResetRoute}
+          activeOpacity={0.9}
+          style={[styles.roadRoutingButton, { backgroundColor: "#d00" }]}
+        >
+          <Ionicons name="trash" size={18} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -834,15 +854,17 @@ export default function HomeScreen() {
                 </ScrollView>
                 <View style={styles.modalFooter}>
                   <TouchableOpacity
-                    onPress={() => setInfoOpen(false)}
-                    style={styles.cancelButton}
-                  >
-                    <Text style={styles.cancelButtonText}>Закрыть</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
                     onPress={() => {
                       setInfoOpen(false);
-                      setAnalyzeOpen(true);
+                      // Save current route and navigate to Explore
+                      if (info) {
+                        setCurrentRoute({
+                          points: info.points,
+                          roadRouting,
+                          lengthKm: info.lengthKm,
+                        });
+                      }
+                      router.push("/(tabs)/explore");
                     }}
                     style={styles.analyzePrimaryButton}
                   >
