@@ -91,4 +91,30 @@ export const styles = StyleSheet.create({
     color: "#333",
     flex: 1,
   },
+  mapTypeContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  mapTypeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+    backgroundColor: "#f0f0f0",
+    borderWidth: 1,
+    borderColor: "#e1e5e9",
+  },
+  mapTypeButtonSelected: {
+    backgroundColor: "#007AFF",
+    borderColor: "#007AFF",
+  },
+  mapTypeButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#333",
+  },
+  mapTypeButtonTextSelected: {
+    color: "#fff",
+  },
 });

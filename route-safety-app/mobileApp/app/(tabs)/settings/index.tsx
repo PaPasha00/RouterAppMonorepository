@@ -8,6 +8,7 @@ import {
   Switch,
 } from "react-native";
 import { useState, useEffect } from "react";
+import { router } from "expo-router";
 import { styles } from "./styles";
 import {
   loadSettings,
@@ -67,6 +68,8 @@ export default function SettingsScreen() {
       clearSettingsCache();
       console.log("[SETTINGS] Настройки сохранены:", newSettings);
       Alert.alert("Успешно", "Настройки сохранены");
+      // Возвращаемся на главный экран, чтобы изменения применились
+      router.back();
     } catch (error) {
       console.error("[SETTINGS] Ошибка сохранения:", error);
       Alert.alert("Ошибка", "Не удалось сохранить настройки");

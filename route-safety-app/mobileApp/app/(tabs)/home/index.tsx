@@ -11,6 +11,9 @@ import {
   TextInput,
   Platform,
 } from "react-native";
+import DraggableFlatList, {
+  RenderItemParams,
+} from "react-native-draggable-flatlist";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import MapView, {
   Marker,
@@ -18,9 +21,16 @@ import MapView, {
   LatLng,
   MapPressEvent,
   UserLocationChangeEvent,
+  UrlTile,
 } from "react-native-maps";
 import * as Location from "expo-location";
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import PlaceSearch, {
   PlaceResult,
   PlaceSearchHandle,
@@ -29,7 +39,7 @@ import { styles } from "./styles";
 import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { apiPost, API_CONFIG, getApiUrl } from "../../../config/api";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { setAnalysisResult } from "../../../store/analysisStore";
 import { getElevationData } from "./helpers";
 import { setCurrentRoute } from "../../../store/routeStore";
@@ -40,6 +50,15 @@ import {
   saveSettings,
   clearSettingsCache,
 } from "../../../store/settingsStore";
+
+// Тип карты (локально, так как больше не в настройках)
+type MapType = "osm" | "yandex" | "google-satellite" | "2gis" | "apple";
+
+// Интерфейс для точки маршрута с названием
+interface WaypointWithName extends LatLng {
+  name: string;
+  id: string;
+}
 
 function haversineKm(a: LatLng, b: LatLng): number {
   const R = 6371;
@@ -609,7 +628,26 @@ export default function HomeScreen() {
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [waypoints, setWaypoints] = useState<LatLng[]>([]);
+  const [waypointNames, setWaypointNames] = useState<Record<number, string>>(
+    {}
+  );
+  const [routeMenuOpen, setRouteMenuOpen] = useState(false);
+  const [editingWaypointIndex, setEditingWaypointIndex] = useState<
+    number | null
+  >(null);
+  const [editingWaypointName, setEditingWaypointName] = useState("");
   const [routePolyline, setRoutePolyline] = useState<LatLng[] | null>(null);
+
+  // Данные для DraggableFlatList (объединяем точки и названия)
+  const routeMenuData = useMemo(() => {
+    return waypoints.map((pt, idx) => ({
+      id: `waypoint-${idx}-${pt.latitude}-${pt.longitude}`, // Уникальный ID на основе координат
+      coordinate: pt,
+      index: idx,
+      name: waypointNames[idx] || `Точка ${idx + 1}`,
+    }));
+  }, [waypoints, waypointNames]);
+
   const [routeMode, setRouteMode] = useState(false);
   const [roadRouting, setRoadRouting] = useState(false);
   const [riverRouting, setRiverRouting] = useState(false);
@@ -639,6 +677,37 @@ export default function HomeScreen() {
   // Состояние для отображения километража на маршруте
   const [showDistanceMarkers, setShowDistanceMarkers] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [mapType, setMapType] = useState<MapType>("osm");
+  const [mapKey, setMapKey] = useState(0); // Для принудительного обновления карты
+
+  // Используем OSM по умолчанию (выбор карт убран из настроек)
+  // mapType остается для внутреннего использования, но всегда использует OSM
+
+  // Функция для генерации URL тайлов в зависимости от типа карты
+  const getTileUrlTemplate = (type: MapType): string => {
+    switch (type) {
+      case "osm":
+        // OpenStreetMap - используем стандартный сервер тайлов
+        return "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+      case "yandex":
+        // Яндекс карты - используем публичный слой
+        // Формат: https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}
+        return "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&lang=ru_RU";
+      case "google-satellite":
+        // Google Satellite - используем поддомены для балансировки нагрузки
+        // Формат: https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}
+        // Используем mt0, mt1, mt2, mt3 для балансировки
+        return "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}";
+      case "2gis":
+        // 2ГИС - используем публичный API
+        return "https://tile2.maps.2gis.com/tiles?x={x}&y={y}&z={z}";
+      case "apple":
+        // Apple Maps - используем стандартный тип карты (не тайлы)
+        return "";
+      default:
+        return "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+    }
+  };
 
   const allTourismTypes = ["пеший", "водный", "автомобильный"];
 
@@ -796,7 +865,19 @@ export default function HomeScreen() {
 
   const handleMapPress = (e: MapPressEvent) => {
     const { coordinate } = e.nativeEvent;
-    setWaypoints((prev) => (routeMode ? [...prev, coordinate] : [coordinate]));
+    setWaypoints((prev) => {
+      const newWaypoints = routeMode ? [...prev, coordinate] : [coordinate];
+      // Автоматически устанавливаем название для новой точки
+      if (!routeMode) {
+        setWaypointNames({ 0: "Точка 1" });
+      } else {
+        setWaypointNames((prevNames) => ({
+          ...prevNames,
+          [newWaypoints.length - 1]: `Точка ${newWaypoints.length}`,
+        }));
+      }
+      return newWaypoints;
+    });
     dismissSearch();
   };
 
@@ -839,6 +920,7 @@ export default function HomeScreen() {
 
   const handleResetRoute = () => {
     setWaypoints([]);
+    setWaypointNames({});
     setRoutePolyline(null);
     setRouteMode(false);
     setRoadRouting(false);
@@ -1161,6 +1243,16 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
+      {waypoints.length >= 2 && (
+        <TouchableOpacity
+          onPress={() => setRouteMenuOpen(true)}
+          activeOpacity={0.9}
+          style={styles.routeMenuButton}
+        >
+          <Ionicons name="list" size={20} color="#fff" />
+        </TouchableOpacity>
+      )}
+
       <View style={styles.menuContainer}>
         {menuOpen && (
           <BlurView intensity={40} tint="dark" style={styles.blurMenuContainer}>
@@ -1245,6 +1337,7 @@ export default function HomeScreen() {
         <Text style={styles.error}>{errorMsg}</Text>
       ) : (
         <MapView
+          key={`map-${mapType}-${mapKey}`}
           ref={mapRef}
           style={styles.map}
           initialRegion={initialRegion}
@@ -1254,12 +1347,42 @@ export default function HomeScreen() {
           onPress={handleMapPress}
           onPanDrag={dismissSearch}
           onRegionChangeComplete={handleRegionChange}
+          mapType={mapType === "apple" ? "standard" : "none"}
         >
+          {mapType !== "apple" &&
+            (() => {
+              const urlTemplate = getTileUrlTemplate(mapType);
+              console.log(
+                "[MAP TYPE] Рендер карты, mapType:",
+                mapType,
+                "mapKey:",
+                mapKey,
+                "urlTemplate:",
+                urlTemplate
+              );
+              if (!urlTemplate) {
+                console.log("[MAP TYPE] URL шаблон пустой, не рендерим тайлы");
+                return null;
+              }
+              console.log(
+                "[MAP TYPE] Рендерим UrlTile с шаблоном:",
+                urlTemplate
+              );
+              return (
+                <UrlTile
+                  urlTemplate={urlTemplate}
+                  maximumZ={19}
+                  minimumZ={0}
+                  flipY={false}
+                  zIndex={-1}
+                />
+              );
+            })()}
           {waypoints.map((pt, idx) => (
             <Marker
               key={`${pt.latitude}-${pt.longitude}-${idx}`}
               coordinate={pt}
-              title={`Точка ${idx + 1}`}
+              title={waypointNames[idx] || `Точка ${idx + 1}`}
             />
           ))}
           {!roadRouting && !riverRouting && waypoints.length >= 2 && (
@@ -1343,6 +1466,168 @@ export default function HomeScreen() {
           <Ionicons name="close" size={18} color="#fff" />
         </TouchableOpacity>
       )}
+
+      {/* Модальное окно меню маршрута */}
+      <Modal
+        visible={routeMenuOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRouteMenuOpen(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setRouteMenuOpen(false)}
+        >
+          <Pressable
+            style={styles.routeMenuModal}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.routeMenuHeader}>
+              <Text style={styles.routeMenuTitle}>Точки маршрута</Text>
+              <TouchableOpacity
+                onPress={() => setRouteMenuOpen(false)}
+                style={styles.routeMenuCloseButton}
+              >
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.routeMenuListWrapper}>
+              <DraggableFlatList
+                data={routeMenuData}
+                removeClippedSubviews={false}
+                onDragEnd={({ data }) => {
+                  // Обновляем порядок точек и названий
+                  const newWaypoints = data.map((item) => item.coordinate);
+                  const newNames: Record<number, string> = {};
+                  data.forEach((item, newIdx) => {
+                    newNames[newIdx] = item.name;
+                  });
+                  setWaypoints(newWaypoints);
+                  setWaypointNames(newNames);
+                  // Сбрасываем маршрут, чтобы он пересчитался с новым порядком точек
+                  setRoutePolyline(null);
+                }}
+                keyExtractor={(item) => item.id}
+                renderItem={({
+                  item,
+                  drag,
+                  isActive,
+                }: RenderItemParams<(typeof routeMenuData)[0]>) => {
+                  const idx = item.index;
+                  return (
+                    <View
+                      style={[
+                        styles.routeMenuItem,
+                        isActive && styles.routeMenuItemActive,
+                      ]}
+                    >
+                      <TouchableOpacity
+                        onLongPress={drag}
+                        delayLongPress={0}
+                        disabled={isActive || editingWaypointIndex === idx}
+                        style={styles.routeMenuItemDragHandle}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="reorder-three-outline"
+                          size={24}
+                          color="#666"
+                        />
+                      </TouchableOpacity>
+                      <View style={styles.routeMenuItemContent}>
+                        <View style={styles.routeMenuItemHeader}>
+                          {editingWaypointIndex === idx ? (
+                            <TextInput
+                              style={styles.routeMenuItemInput}
+                              value={editingWaypointName}
+                              onChangeText={setEditingWaypointName}
+                              placeholder={`Точка ${idx + 1}`}
+                              autoFocus
+                              onSubmitEditing={() => {
+                                if (editingWaypointName.trim()) {
+                                  setWaypointNames((prev) => ({
+                                    ...prev,
+                                    [idx]: editingWaypointName.trim(),
+                                  }));
+                                }
+                                setEditingWaypointIndex(null);
+                                setEditingWaypointName("");
+                              }}
+                              onBlur={() => {
+                                if (editingWaypointName.trim()) {
+                                  setWaypointNames((prev) => ({
+                                    ...prev,
+                                    [idx]: editingWaypointName.trim(),
+                                  }));
+                                }
+                                setEditingWaypointIndex(null);
+                                setEditingWaypointName("");
+                              }}
+                            />
+                          ) : (
+                            <Text style={styles.routeMenuItemName}>
+                              {item.name}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={styles.routeMenuItemCoords}>
+                          {item.coordinate.latitude.toFixed(6)},{" "}
+                          {item.coordinate.longitude.toFixed(6)}
+                        </Text>
+                      </View>
+                      <View style={styles.routeMenuItemActions}>
+                        {editingWaypointIndex !== idx && (
+                          <>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setEditingWaypointIndex(idx);
+                                setEditingWaypointName(item.name);
+                              }}
+                              style={styles.routeMenuActionButton}
+                            >
+                              <Ionicons
+                                name="pencil"
+                                size={18}
+                                color="#007AFF"
+                              />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const newWaypoints = waypoints.filter(
+                                  (_, i) => i !== idx
+                                );
+                                const newNames: Record<number, string> = {};
+                                newWaypoints.forEach((_, i) => {
+                                  if (i < idx) {
+                                    newNames[i] =
+                                      waypointNames[i] || `Точка ${i + 1}`;
+                                  } else {
+                                    // Сдвигаем индексы для точек после удаленной
+                                    const oldName = waypointNames[i + 1];
+                                    newNames[i] = oldName || `Точка ${i + 1}`;
+                                  }
+                                });
+                                setWaypoints(newWaypoints);
+                                setWaypointNames(newNames);
+                              }}
+                              style={styles.routeMenuActionButton}
+                            >
+                              <Ionicons name="trash" size={18} color="#d00" />
+                            </TouchableOpacity>
+                          </>
+                        )}
+                      </View>
+                    </View>
+                  );
+                }}
+                contentContainerStyle={styles.routeMenuList}
+                nestedScrollEnabled={true}
+                scrollEnabled={true}
+              />
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       <Modal
         visible={analyzeOpen}
