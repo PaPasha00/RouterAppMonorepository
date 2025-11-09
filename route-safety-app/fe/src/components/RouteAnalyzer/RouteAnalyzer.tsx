@@ -133,7 +133,7 @@ const RouteAnalyzer: React.FC<RouteAnalyzerProps> = ({
             {elevationData ? elevationData.length + " точек" : "загружаются..."}
           </div>
           <div style={{ fontSize: "12px", color: "#666", marginTop: "10px" }}>
-            <div>Тип туризма: {inputs.tourismType}</div>
+            <div>Тип маршрута: {inputs.tourismType}</div>
             <div>Дата начала: {inputs.startDate}</div>
             <div>Дата окончания: {inputs.endDate}</div>
           </div>

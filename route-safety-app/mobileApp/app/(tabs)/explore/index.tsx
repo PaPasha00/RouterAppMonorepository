@@ -18,7 +18,7 @@ import { clearCurrentRoute } from "../../../store/routeStore";
 import { clearAnalysisResult } from "../../../store/analysisStore";
 import { styles } from "./styles";
 import DateTimePicker from "@react-native-community/datetimepicker";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { API_CONFIG, getApiUrl, apiPost } from "../../../config/api";
 import { getElevationData } from "../home/helpers";
 
@@ -117,14 +117,57 @@ export default function ExploreScreen() {
     }
   };
 
-  const tourismTypes = [
-    "пеший",
-    "велосипедный",
-    "водный",
-    "автомобильный",
-    "воздушный",
-    "мото",
-  ];
+  const tourismTypes = ["пеший", "водный", "автомобильный"];
+
+  // Функция для проверки, доступен ли тип туризма
+  const isTourismTypeAvailable = (type: string): boolean => {
+    if (type === "водный") {
+      // Водный доступен только если выбран водный маршрут
+      return route?.riverRouting ?? false;
+    }
+    if (type === "автомобильный") {
+      // Автомобильный доступен только если построена дорога
+      return route?.roadRouting ?? false;
+    }
+    return true; // Пеший всегда доступен
+  };
+
+  // Автоматически устанавливаем тип туризма при изменении режима маршрута
+  useEffect(() => {
+    if (!route) return;
+
+    const currentAvailable = isTourismTypeAvailable(tourismType);
+
+    if (!currentAvailable) {
+      console.log(
+        `[EXPLORE TOURISM TYPE FIX] Текущий тип "${tourismType}" недоступен, переключаем на "пеший"`
+      );
+      setTourismType("пеший");
+      return;
+    }
+
+    if (route.riverRouting) {
+      // Если выбран водный маршрут, автоматически устанавливаем водный тип
+      if (tourismType !== "водный") {
+        console.log(
+          `[EXPLORE TOURISM TYPE] Автоматически переключаем на "водный" (riverRouting=true)`
+        );
+        setTourismType("водный");
+      }
+    } else if (route.roadRouting && tourismType === "водный") {
+      // Если водный маршрут не выбран, но выбран водный тип, переключаем на пеший
+      console.log(
+        `[EXPLORE TOURISM TYPE] Переключаем с "водный" на "пеший" (riverRouting=false)`
+      );
+      setTourismType("пеший");
+    } else if (!route.roadRouting && tourismType === "автомобильный") {
+      // Если дорога не построена, но выбран автомобильный тип, переключаем на пеший
+      console.log(
+        `[EXPLORE TOURISM TYPE] Переключаем с "автомобильный" на "пеший" (roadRouting=false)`
+      );
+      setTourismType("пеший");
+    }
+  }, [route?.riverRouting, route?.roadRouting]);
 
   const runAnalyze = async () => {
     try {
@@ -187,8 +230,15 @@ export default function ExploreScreen() {
         "[Explore ANALYZE] POST",
         url,
         "payload points:",
-        coords.length
+        coords.length,
+        "tourismType:",
+        tourismType
       );
+      console.log("[Explore ANALYZE] Body:", {
+        ...body,
+        coordinates: `[${coords.length} points]`,
+        elevationData: `[${elevations.length} values]`,
+      });
       const result = await apiPost<any>(
         API_CONFIG.ENDPOINTS.ANALYZE_ROUTE,
         body
@@ -261,35 +311,56 @@ export default function ExploreScreen() {
 
           {/* Тип туризма */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Тип туризма</Text>
+            <Text style={styles.cardTitle}>Тип маршрута</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View style={{ flexDirection: "row", gap: 8 }}>
-                {tourismTypes.map((t) => (
-                  <TouchableOpacity
-                    key={t}
-                    onPress={() => setTourismType(t)}
-                    style={{
-                      paddingHorizontal: 16,
-                      paddingVertical: 8,
-                      borderRadius: 20,
-                      backgroundColor:
-                        tourismType === t ? "#007AFF" : "#f0f0f0",
-                    }}
-                  >
-                    <Text
-                      style={{ color: tourismType === t ? "#fff" : "#333" }}
+                {(() => {
+                  const availableTypes = tourismTypes.filter((type) =>
+                    isTourismTypeAvailable(type)
+                  );
+                  console.log(
+                    `[EXPLORE TOURISM TYPE FILTER] Доступные типы: ${availableTypes.join(
+                      ", "
+                    )}, riverRouting=${
+                      route?.riverRouting ?? false
+                    }, roadRouting=${route?.roadRouting ?? false}`
+                  );
+                  return availableTypes.map((t) => (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => {
+                        // Дополнительная проверка на всякий случай
+                        if (!isTourismTypeAvailable(t)) {
+                          console.log(
+                            `[EXPLORE TOURISM TYPE] Блокировка выбора недоступного типа: ${t}`
+                          );
+                          return;
+                        }
+                        setTourismType(t);
+                      }}
+                      style={{
+                        paddingHorizontal: 16,
+                        paddingVertical: 8,
+                        borderRadius: 20,
+                        backgroundColor:
+                          tourismType === t ? "#007AFF" : "#f0f0f0",
+                      }}
                     >
-                      {t}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text
+                        style={{ color: tourismType === t ? "#fff" : "#333" }}
+                      >
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  ));
+                })()}
               </View>
             </ScrollView>
           </View>
 
           {/* Даты */}
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Даты похода</Text>
+            <Text style={styles.cardTitle}>Даты маршрута</Text>
             <View style={{ flexDirection: "row", gap: 12 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 12, color: "#666", marginBottom: 4 }}>

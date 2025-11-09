@@ -85,15 +85,33 @@ export function generateAnalysisPrompt(
 
   const includeRecommendations = request.includeAIRecommendations !== false; // По умолчанию true
   
+  // Определяем тип маршрута для более точных рекомендаций
+  const tourismType = request.tourismType || 'пеший';
+  let tourismTypeNote = '';
+  
+  if (tourismType.toLowerCase().includes('водный')) {
+    // Формируем информацию о координатах для определения реки
+    const coordsInfo = request.coordinates.length > 0 
+      ? `\nКоординаты маршрута (первые и последние точки):\n- Начало: ${request.coordinates[0][0]}, ${request.coordinates[0][1]}\n- Конец: ${request.coordinates[request.coordinates.length - 1][0]}, ${request.coordinates[request.coordinates.length - 1][1]}\n- Всего точек: ${request.coordinates.length}`
+      : '';
+    
+    tourismTypeNote = `\n\nКРИТИЧЕСКИ ВАЖНО: Это ВОДНЫЙ маршрут (путешествие по реке).${coordsInfo}\n\nОБЯЗАТЕЛЬНО: Проанализируй координаты маршрута и определи, по какой реке проходит маршрут. Используй географический контекст и координаты для точного определения названия реки. Дай рекомендации, специфичные именно для этой реки: особенности течения, пороги и препятствия (если известны для этой реки), характерные участки, места для стоянок на берегу, особенности навигации на этом участке реки.\n\nРекомендации должны быть специфичны для водного туризма: безопасность на воде, спасательные жилеты, пороги и препятствия (конкретные для этой реки), течение, погодные условия на воде, экипировка для водного маршрута, техника гребли/управления плавсредством, места для стоянок на берегу, особенности реки на этом участке.\n\nНЕ давай рекомендации про спуски, подъемы, пешие переходы или горные тропы - это водный маршрут!`;
+  } else if (tourismType.toLowerCase().includes('автомобильный')) {
+    tourismTypeNote = '\n\nКРИТИЧЕСКИ ВАЖНО: Это АВТОМОБИЛЬНЫЙ маршрут. Рекомендации должны быть специфичны для автомобильного туризма: состояние дорог, заправки, парковки, техническое состояние автомобиля, правила дорожного движения, места для ночевок с парковкой. НЕ давай рекомендации про пешие переходы, спуски/подъемы для пешеходов или экипировку для походов.';
+  } else {
+    tourismTypeNote = '\n\nКРИТИЧЕСКИ ВАЖНО: Это ПЕШИЙ маршрут. Рекомендации должны быть специфичны для пешего туризма: экипировка для похода, обувь, рюкзак, питание в пути, места для ночевок, безопасность на тропах, спуски и подъемы, навигация.';
+  }
+  
   let recommendationsNote = '';
   if (!includeRecommendations) {
     recommendationsNote = '\n\nВАЖНО: Пользователь НЕ хочет получать рекомендации. Оставь поле recommendations пустым массивом [] в summary и в каждом дне.';
     console.log('🔕 Рекомендации ИИ отключены пользователем - промпт изменен');
     console.log('📝 Добавлена инструкция в промпт: "Оставь поле recommendations пустым массивом []"');
   } else {
-    recommendationsNote = '\n\nВАЖНО: Обязательно заполни поле recommendations полезными рекомендациями для этого маршрута. Для длинных и сложных маршрутов дай детальные рекомендации по экипировке, безопасности, питанию, ночевкам и другим важным аспектам. В каждом дне также добавь рекомендации, если они уместны.';
+    recommendationsNote = `\n\nВАЖНО: Обязательно заполни поле recommendations полезными рекомендациями для этого маршрута. Для длинных и сложных маршрутов дай детальные рекомендации по экипировке, безопасности, питанию, ночевкам и другим важным аспектам. В каждом дне также добавь рекомендации, если они уместны.${tourismTypeNote}`;
     console.log('✅ Рекомендации ИИ включены - будут включены в ответ');
     console.log('📝 Добавлена инструкция в промпт: "Обязательно заполни поле recommendations"');
+    console.log(`🎯 Тип маршрута: ${tourismType} - рекомендации будут адаптированы под этот тип`);
   }
   
   console.log(`⚙️ Параметр includeAIRecommendations из запроса: ${request.includeAIRecommendations} (обработано как: ${includeRecommendations})`);
@@ -121,7 +139,8 @@ ${JSON.stringify(jsonSchema, null, 2)}
 - Даты: ${request.startDate} - ${request.endDate} (${totalDays} дн.)
 - Уклон ср: ${routeAnalysis.avgSlope.toFixed(1)}%, макс: ${routeAnalysis.maxSlope.toFixed(1)}%
 - Извилистость: ${routeAnalysis.sinuosity.toFixed(2)}
-- Высоты: мин ${routeAnalysis.minElevation}м, макс ${routeAnalysis.maxElevation}м, перепад ${routeAnalysis.maxElevation - routeAnalysis.minElevation}м${weatherInfo}${recommendationsNote}
+- Высоты: мин ${routeAnalysis.minElevation}м, макс ${routeAnalysis.maxElevation}м, перепад ${routeAnalysis.maxElevation - routeAnalysis.minElevation}м
+${request.tourismType?.toLowerCase().includes('водный') ? `- Координаты маршрута (для определения реки): начало [${request.coordinates[0]?.[0]}, ${request.coordinates[0]?.[1]}], конец [${request.coordinates[request.coordinates.length - 1]?.[0]}, ${request.coordinates[request.coordinates.length - 1]?.[1]}]` : ''}${weatherInfo}${recommendationsNote}
 
 ВАЖНО: Используй РЕАЛЬНЫЕ данные о погоде из раздела "ПРОГНОЗ ПОГОДЫ ПО ДНЯМ" для заполнения поля weather в массиве days. Не придумывай погоду, используй только предоставленные данные.
 

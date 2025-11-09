@@ -27,6 +27,7 @@ import PlaceSearch, {
 } from "../../../components/PlaceSearch";
 import { styles } from "./styles";
 import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
 import { apiPost, API_CONFIG, getApiUrl } from "../../../config/api";
 import { router } from "expo-router";
 import { setAnalysisResult } from "../../../store/analysisStore";
@@ -51,6 +52,70 @@ function haversineKm(a: LatLng, b: LatLng): number {
     Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(s), Math.sqrt(1 - s));
   return R * c;
+}
+
+// Функция для упрощения маршрута: удаляет точки из центра, которые лежат слишком близко
+// Сохраняет начальные и конечные точки, а также точки с большими изменениями направления
+function simplifyRoute(
+  points: LatLng[],
+  maxPoints: number = 100,
+  minDistanceKm: number = 0.05
+): LatLng[] {
+  if (points.length <= maxPoints) {
+    return points;
+  }
+
+  // Всегда сохраняем первую и последнюю точки
+  if (points.length <= 2) {
+    return points;
+  }
+
+  const simplified: LatLng[] = [points[0]]; // Начальная точка
+  const endPoint = points[points.length - 1]; // Конечная точка
+
+  // Вычисляем общее расстояние маршрута
+  let totalDistance = 0;
+  for (let i = 1; i < points.length; i++) {
+    totalDistance += haversineKm(points[i - 1], points[i]);
+  }
+
+  // Адаптивный минимальный интервал: чем длиннее маршрут, тем больше интервал
+  const adaptiveMinDistance = Math.max(
+    minDistanceKm,
+    totalDistance / maxPoints / 2
+  );
+
+  // Проходим по точкам и добавляем только те, которые достаточно далеко от предыдущей
+  let lastAddedIndex = 0;
+  for (let i = 1; i < points.length - 1; i++) {
+    const distance = haversineKm(points[lastAddedIndex], points[i]);
+
+    // Добавляем точку, если она достаточно далеко, или если это важная точка поворота
+    if (distance >= adaptiveMinDistance) {
+      simplified.push(points[i]);
+      lastAddedIndex = i;
+    }
+  }
+
+  // Добавляем конечную точку, если она еще не добавлена
+  if (lastAddedIndex < points.length - 1) {
+    simplified.push(endPoint);
+  } else if (simplified[simplified.length - 1] !== endPoint) {
+    simplified.push(endPoint);
+  }
+
+  // Если все еще слишком много точек, применяем более агрессивное упрощение
+  if (simplified.length > maxPoints) {
+    const step = Math.ceil(simplified.length / maxPoints);
+    const result: LatLng[] = [simplified[0]];
+    for (let i = step; i < simplified.length - 1; i += step) {
+      result.push(simplified[i]);
+    }
+    result.push(simplified[simplified.length - 1]);
+    return result;
+  }
+
+  return simplified;
 }
 
 async function fetchRoadRoute(points: LatLng[]): Promise<LatLng[] | null> {
@@ -573,15 +638,48 @@ export default function HomeScreen() {
 
   // Состояние для отображения километража на маршруте
   const [showDistanceMarkers, setShowDistanceMarkers] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const tourismTypes = [
-    "пеший",
-    "велосипедный",
-    "водный",
-    "автомобильный",
-    "воздушный",
-    "мото",
-  ];
+  const allTourismTypes = ["пеший", "водный", "автомобильный"];
+
+  // Функция для проверки, доступен ли тип туризма
+  const isTourismTypeAvailable = (type: string): boolean => {
+    if (type === "водный") {
+      // Водный доступен только если выбран водный маршрут
+      return riverRouting;
+    }
+    if (type === "автомобильный") {
+      // Автомобильный доступен только если построена дорога
+      return roadRouting;
+    }
+    return true; // Пеший всегда доступен
+  };
+
+  // Автоматически устанавливаем тип туризма при изменении режима маршрута
+  useEffect(() => {
+    const currentAvailable = isTourismTypeAvailable(tourismType);
+
+    if (!currentAvailable) {
+      console.log(
+        `[TOURISM TYPE FIX] Текущий тип "${tourismType}" недоступен, переключаем на "пеший"`
+      );
+      setTourismType("пеший");
+      return;
+    }
+
+    if (riverRouting) {
+      // Если выбран водный маршрут, автоматически устанавливаем водный тип
+      if (tourismType !== "водный") {
+        setTourismType("водный");
+      }
+    } else if (roadRouting && tourismType === "водный") {
+      // Если водный маршрут не выбран, но выбран водный тип, переключаем на пеший
+      setTourismType("пеший");
+    } else if (!roadRouting && tourismType === "автомобильный") {
+      // Если дорога не построена, но выбран автомобильный тип, переключаем на пеший
+      setTourismType("пеший");
+    }
+  }, [riverRouting, roadRouting]);
 
   const loadingSteps = [
     "Получение данных о высотах...",
@@ -756,10 +854,20 @@ export default function HomeScreen() {
       setLoadingStep(0);
       setLoadingProgress(0);
 
-      const basePoints =
+      let basePoints =
         (roadRouting || riverRouting) && routePolyline
           ? routePolyline
           : waypoints;
+
+      // Упрощаем маршрут, если точек слишком много (максимум 100 точек для ИИ)
+      const originalPointCount = basePoints.length;
+      basePoints = simplifyRoute(basePoints, 100, 0.05);
+      if (basePoints.length < originalPointCount) {
+        console.log(
+          `[ANALYZE] Упрощен маршрут: ${originalPointCount} -> ${basePoints.length} точек`
+        );
+      }
+
       const pts = basePoints.map((p) => ({
         lat: p.latitude,
         lng: p.longitude,
@@ -954,10 +1062,11 @@ export default function HomeScreen() {
       111 *
       Math.cos(((mapRegion?.latitude || 55) * Math.PI) / 180);
 
-    if (visibleWidthKm <= 10) return 1; // Каждые 1 км
-    if (visibleWidthKm <= 50) return 10; // Каждые 10 км
-    if (visibleWidthKm <= 100) return 50; // Каждые 50 км
-    return 100; // Каждые 100 км
+    if (visibleWidthKm <= 5) return 0.5; // Каждые 0.5 км
+    if (visibleWidthKm <= 20) return 1; // Каждые 1 км
+    if (visibleWidthKm <= 50) return 5; // Каждые 5 км
+    if (visibleWidthKm <= 100) return 10; // Каждые 10 км
+    return 25; // Каждые 25 км
   };
 
   // Функция для вычисления точек с километражем на маршруте
@@ -1042,67 +1151,93 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      <View style={styles.routeControlsContainer}>
+      {info && info.points.length >= 2 && (
         <TouchableOpacity
-          onPress={() => setRouteMode((v) => !v)}
+          onPress={() => setInfoOpen(true)}
+          activeOpacity={0.9}
+          style={styles.infoButtonLeft}
+        >
+          <Text style={styles.infoButtonText}>ИИ</Text>
+        </TouchableOpacity>
+      )}
+
+      <View style={styles.menuContainer}>
+        {menuOpen && (
+          <BlurView intensity={40} tint="dark" style={styles.blurMenuContainer}>
+            <View style={styles.routeControlsContainer}>
+              <TouchableOpacity
+                onPress={() => setRouteMode((v) => !v)}
+                activeOpacity={0.9}
+                style={[
+                  styles.routeModeButton,
+                  routeMode && styles.routeModeButtonActive,
+                ]}
+              >
+                <Ionicons name="add" size={18} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setRoadRouting((v) => {
+                    if (v) return false;
+                    setRiverRouting(false);
+                    return true;
+                  });
+                }}
+                activeOpacity={0.9}
+                style={[
+                  styles.roadRoutingButton,
+                  roadRouting && styles.roadRoutingButtonActive,
+                ]}
+              >
+                <Ionicons name="map" size={18} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setRiverRouting((v) => {
+                    if (v) return false;
+                    setRoadRouting(false);
+                    return true;
+                  });
+                }}
+                activeOpacity={0.9}
+                style={[
+                  styles.roadRoutingButton,
+                  riverRouting && { backgroundColor: "#007AFF" },
+                ]}
+              >
+                <Ionicons name="water" size={18} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowDistanceMarkers(!showDistanceMarkers);
+                }}
+                activeOpacity={0.9}
+                style={[
+                  styles.roadRoutingButton,
+                  showDistanceMarkers && { backgroundColor: "#FF9500" },
+                ]}
+              >
+                <Ionicons name="location" size={18} color="#fff" />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleResetRoute}
+                activeOpacity={0.9}
+                style={[styles.roadRoutingButton, { backgroundColor: "#d00" }]}
+              >
+                <Ionicons name="trash" size={18} color="#fff" />
+              </TouchableOpacity>
+            </View>
+          </BlurView>
+        )}
+        <TouchableOpacity
+          onPress={() => setMenuOpen(!menuOpen)}
           activeOpacity={0.9}
           style={[
-            styles.routeModeButton,
-            routeMode && styles.routeModeButtonActive,
+            styles.menuToggleButton,
+            menuOpen && styles.menuToggleButtonActive,
           ]}
         >
-          <Ionicons name="add" size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            setRoadRouting((v) => {
-              if (v) return false;
-              setRiverRouting(false);
-              return true;
-            });
-          }}
-          activeOpacity={0.9}
-          style={[
-            styles.roadRoutingButton,
-            roadRouting && styles.roadRoutingButtonActive,
-          ]}
-        >
-          <Ionicons name="navigate" size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            setRiverRouting((v) => {
-              if (v) return false;
-              setRoadRouting(false);
-              return true;
-            });
-          }}
-          activeOpacity={0.9}
-          style={[
-            styles.roadRoutingButton,
-            riverRouting && { backgroundColor: "#007AFF" },
-          ]}
-        >
-          <Ionicons name="water" size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => {
-            setShowDistanceMarkers(!showDistanceMarkers);
-          }}
-          activeOpacity={0.9}
-          style={[
-            styles.roadRoutingButton,
-            showDistanceMarkers && { backgroundColor: "#FF9500" },
-          ]}
-        >
-          <Ionicons name="location" size={18} color="#fff" />
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={handleResetRoute}
-          activeOpacity={0.9}
-          style={[styles.roadRoutingButton, { backgroundColor: "#d00" }]}
-        >
-          <Ionicons name="trash" size={18} color="#fff" />
+          <Ionicons name={menuOpen ? "close" : "menu"} size={20} color="#fff" />
         </TouchableOpacity>
       </View>
 
@@ -1183,7 +1318,9 @@ export default function HomeScreen() {
             >
               <View style={styles.distanceMarkerContainer}>
                 <Text style={styles.distanceMarkerText}>
-                  {marker.distance.toFixed(0)} км
+                  {marker.distance < 1
+                    ? `${(marker.distance * 1000).toFixed(0)} м`
+                    : `${marker.distance.toFixed(1)} км`}
                 </Text>
               </View>
             </Marker>
@@ -1195,16 +1332,6 @@ export default function HomeScreen() {
         <View style={styles.routingIndicatorContainer}>
           <ActivityIndicator color={riverRouting ? "#007AFF" : "#34C759"} />
         </View>
-      )}
-
-      {info && info.points.length >= 2 && (
-        <TouchableOpacity
-          onPress={() => setInfoOpen(true)}
-          activeOpacity={0.9}
-          style={styles.infoButton}
-        >
-          <Ionicons name="information-circle" size={22} color="#fff" />
-        </TouchableOpacity>
       )}
 
       {searchVisible && (
@@ -1254,7 +1381,7 @@ export default function HomeScreen() {
 
               {/* Тип туризма */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Тип туризма</Text>
+                <Text style={styles.formLabel}>Тип маршрута</Text>
                 <View style={styles.pickerContainer}>
                   <ScrollView
                     horizontal
@@ -1268,29 +1395,53 @@ export default function HomeScreen() {
                         paddingVertical: 8,
                       }}
                     >
-                      {tourismTypes.map((type) => (
-                        <TouchableOpacity
-                          key={type}
-                          onPress={() => setTourismType(type)}
-                          style={{
-                            paddingHorizontal: 16,
-                            paddingVertical: 8,
-                            borderRadius: 20,
-                            backgroundColor:
-                              tourismType === type ? "#007AFF" : "#f0f0f0",
-                          }}
-                        >
-                          <Text
-                            style={{
-                              color: tourismType === type ? "#fff" : "#333",
-                              fontSize: 14,
-                              fontWeight: "500",
-                            }}
-                          >
-                            {type}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                      {(() => {
+                        const availableTypes = allTourismTypes.filter((type) =>
+                          isTourismTypeAvailable(type)
+                        );
+                        console.log(
+                          `[TOURISM TYPE FILTER] Доступные типы: ${availableTypes.join(
+                            ", "
+                          )}, riverRouting=${riverRouting}, roadRouting=${roadRouting}`
+                        );
+                        return availableTypes.map((type) => {
+                          const isSelected = tourismType === type;
+                          return (
+                            <TouchableOpacity
+                              key={type}
+                              onPress={() => {
+                                // Дополнительная проверка на всякий случай
+                                if (!isTourismTypeAvailable(type)) {
+                                  console.log(
+                                    `[TOURISM TYPE] Блокировка выбора недоступного типа: ${type}`
+                                  );
+                                  return;
+                                }
+                                setTourismType(type);
+                              }}
+                              activeOpacity={0.7}
+                              style={{
+                                paddingHorizontal: 16,
+                                paddingVertical: 8,
+                                borderRadius: 20,
+                                backgroundColor: isSelected
+                                  ? "#007AFF"
+                                  : "#f0f0f0",
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  color: isSelected ? "#fff" : "#333",
+                                  fontSize: 14,
+                                  fontWeight: "500",
+                                }}
+                              >
+                                {type}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        });
+                      })()}
                     </View>
                   </ScrollView>
                 </View>
