@@ -72,3 +72,9 @@ Thumbs.db
 # Temporary files
 tmp/
 temp/
+
+# Database files
+be/data/
+*.db
+*.sqlite
+*.sqlite3
