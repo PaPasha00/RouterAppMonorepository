@@ -14,11 +14,12 @@ console.log(`PORT: ${process.env.PORT || 'не задан'}`);
  */
 function main(): void {
   const app = createApp();
-  const PORT = process.env.PORT || 3001;
+  const PORT = Number(process.env.PORT) || 3001;
 
-  app.listen(PORT, () => {
-    console.log(`🚀 Бэкенд запущен на http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Бэкенд запущен на http://0.0.0.0:${PORT}`);
     console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`🌐 Доступен по IP: http://<ваш-ip>:${PORT}`);
   });
 }
 

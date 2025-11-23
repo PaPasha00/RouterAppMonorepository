@@ -23,11 +23,13 @@ export default function SettingsScreen() {
     pointsPerDay: 20,
     usePointsSystem: true,
     includeAIRecommendations: true,
+    showWaypointNames: false,
   });
   const [pointsInput, setPointsInput] = useState("20");
   const [usePointsSystem, setUsePointsSystem] = useState(true);
   const [includeAIRecommendations, setIncludeAIRecommendations] =
     useState(true);
+  const [showWaypointNames, setShowWaypointNames] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -41,6 +43,7 @@ export default function SettingsScreen() {
       setPointsInput(loaded.pointsPerDay.toString());
       setUsePointsSystem(loaded.usePointsSystem ?? true);
       setIncludeAIRecommendations(loaded.includeAIRecommendations ?? true);
+      setShowWaypointNames((loaded as any).showWaypointNames ?? false);
     } catch (error) {
       console.error("[SETTINGS] Ошибка загрузки:", error);
     } finally {
@@ -59,7 +62,8 @@ export default function SettingsScreen() {
       pointsPerDay: points,
       usePointsSystem,
       includeAIRecommendations,
-    };
+      showWaypointNames,
+    } as Settings;
 
     try {
       await saveSettings(newSettings);
@@ -153,6 +157,26 @@ export default function SettingsScreen() {
               onValueChange={setIncludeAIRecommendations}
               trackColor={{ false: "#767577", true: "#007AFF" }}
               thumbColor={includeAIRecommendations ? "#fff" : "#f4f3f4"}
+            />
+          </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Отображение на карте</Text>
+          <Text style={styles.cardText}>
+            Показывать названия точек маршрута на карте (аналогично меткам
+            километража).
+            {"\n\n"}
+            Названия будут отображаться рядом с каждой точкой маршрута на карте.
+          </Text>
+
+          <View style={styles.switchContainer}>
+            <Text style={styles.switchLabel}>Показывать названия точек</Text>
+            <Switch
+              value={showWaypointNames}
+              onValueChange={setShowWaypointNames}
+              trackColor={{ false: "#767577", true: "#007AFF" }}
+              thumbColor={showWaypointNames ? "#fff" : "#f4f3f4"}
             />
           </View>
         </View>

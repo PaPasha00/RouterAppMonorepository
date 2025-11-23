@@ -88,8 +88,8 @@ export interface DailyRoute {
 }
 
 export interface RouteAnalysisResponse {
-  analysis: string;
-  analysisStructured?: any;
+  analysis: string; // Сырой текст ответа от ИИ (fallback)
+  analysisStructured?: AIAnalysisResponse; // Типизированный и валидированный ответ от ИИ
   stats: RouteGeometryAnalysis;
   terrainType: string;
   geographicContext: GeographicContext;
@@ -100,4 +100,58 @@ export interface RouteAnalysisResponse {
 
 export interface ApiError {
   error: string;
+}
+
+// Строгая типизация ответа от ИИ для анализа маршрута
+export interface AIAnalysisSummary {
+  difficultyScore: number; // 1-10, обязательное поле
+  difficultyReasoning: string; // Обязательное поле
+}
+
+export interface AIAnalysisStats {
+  distanceKm: number;
+  elevationGainM: number;
+  minElevationM: number;
+  maxElevationM: number;
+  avgSlopePercent: number;
+  maxSlopePercent: number;
+  sinuosity: number;
+}
+
+export interface AIAnalysisGeography {
+  terrainType: string;
+  countries: string[];
+  regions: string[];
+  areas: string[];
+  localities: string[];
+  physicalGeography: string; // 3-4 предложения
+  notes?: string;
+}
+
+export interface AIAnalysisDayWeather {
+  temperatureMin: number;
+  temperatureMax: number;
+  conditions: string;
+  windSpeed: number;
+  precipitation: number;
+}
+
+export interface AIAnalysisDay {
+  day: number; // Номер дня, начиная с 1
+  date: string; // Дата в формате YYYY-MM-DD
+  distanceKm: number;
+  elevationGainM: number;
+  keyPoints: string[]; // Ключевые точки маршрута
+  weather: AIAnalysisDayWeather;
+  description: string;
+  recommendations: string[];
+}
+
+export interface AIAnalysisResponse {
+  summary: AIAnalysisSummary;
+  stats: AIAnalysisStats;
+  geography: AIAnalysisGeography;
+  days: AIAnalysisDay[]; // Массив дней, должен соответствовать количеству дней маршрута
+  recommendations: string[]; // Общие рекомендации
+  warnings: string[]; // Предупреждения и важная информация
 }

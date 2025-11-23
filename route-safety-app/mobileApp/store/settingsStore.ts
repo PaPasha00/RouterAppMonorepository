@@ -6,6 +6,7 @@ export interface Settings {
   pointsPerDay: number; // Максимальное количество очков в день
   usePointsSystem: boolean; // Использовать ли систему очков для разбивки маршрута
   includeAIRecommendations: boolean; // Включать ли рекомендации от ИИ в анализ
+  showWaypointNames: boolean; // Показывать ли названия точек на карте
 }
 
 let cachedSettings: Settings | null = null;
@@ -58,6 +59,7 @@ export async function loadSettings(): Promise<Settings> {
     pointsPerDay: DEFAULT_POINTS_PER_DAY,
     usePointsSystem: true,
     includeAIRecommendations: true,
+    showWaypointNames: false,
   };
   cachedSettings = defaultSettings;
   return defaultSettings;
@@ -102,6 +104,7 @@ export function getSettings(): Settings {
     pointsPerDay: DEFAULT_POINTS_PER_DAY,
     usePointsSystem: true,
     includeAIRecommendations: true,
+    showWaypointNames: false,
   };
   cachedSettings = defaultSettings;
   return defaultSettings;

@@ -676,6 +676,8 @@ export default function HomeScreen() {
 
   // Состояние для отображения километража на маршруте
   const [showDistanceMarkers, setShowDistanceMarkers] = useState(false);
+  // Показывать ли названия точек маршрута (настройка из Settings)
+  const [showWaypointNames, setShowWaypointNames] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mapType, setMapType] = useState<MapType>("osm");
   const [mapKey, setMapKey] = useState(0); // Для принудительного обновления карты
@@ -943,7 +945,7 @@ export default function HomeScreen() {
 
       // Упрощаем маршрут, если точек слишком много (максимум 100 точек для ИИ)
       const originalPointCount = basePoints.length;
-      basePoints = simplifyRoute(basePoints, 100, 0.05);
+      basePoints = simplifyRoute(basePoints, 50, 0.05);
       if (basePoints.length < originalPointCount) {
         console.log(
           `[ANALYZE] Упрощен маршрут: ${originalPointCount} -> ${basePoints.length} точек`
@@ -1165,6 +1167,14 @@ export default function HomeScreen() {
     const markers: Array<{ coordinate: LatLng; distance: number }> = [];
     let accumulatedDistance = 0;
 
+    // Добавляем маркер в начале маршрута (0 км)
+    if (pts.length > 0) {
+      markers.push({
+        coordinate: pts[0],
+        distance: 0,
+      });
+    }
+
     for (let i = 1; i < pts.length; i++) {
       const segmentDistance = haversineKm(pts[i - 1], pts[i]);
       const prevAccumulated = accumulatedDistance;
@@ -1194,6 +1204,21 @@ export default function HomeScreen() {
       }
     }
 
+    // Добавляем маркер в конце маршрута
+    if (pts.length > 1 && accumulatedDistance > 0) {
+      const lastMarker = markers[markers.length - 1];
+      // Добавляем только если последний маркер не совпадает с конечной точкой
+      if (
+        !lastMarker ||
+        Math.abs(lastMarker.distance - accumulatedDistance) > 0.01
+      ) {
+        markers.push({
+          coordinate: pts[pts.length - 1],
+          distance: accumulatedDistance,
+        });
+      }
+    }
+
     return markers;
   }, [
     waypoints,
@@ -1214,6 +1239,43 @@ export default function HomeScreen() {
       handleGetElevation(info?.points);
     }
   }, [info?.points.length]);
+
+  // Загружаем настройку показа названий точек при фокусе экрана
+  useFocusEffect(
+    useCallback(() => {
+      try {
+        clearSettingsCache();
+        const settings = getSettings();
+        const showNames = (settings as any).showWaypointNames ?? false;
+        console.log(
+          "[WAYPOINT NAMES] Загрузка настройки при фокусе:",
+          showNames,
+          "settings:",
+          settings
+        );
+        setShowWaypointNames(showNames);
+      } catch (e) {
+        console.error("[WAYPOINT NAMES] Ошибка загрузки настройки:", e);
+      }
+    }, [])
+  );
+  // И при первом монтировании
+  useEffect(() => {
+    try {
+      clearSettingsCache();
+      const settings = getSettings();
+      const showNames = (settings as any).showWaypointNames ?? false;
+      console.log(
+        "[WAYPOINT NAMES] Загрузка настройки при монтировании:",
+        showNames,
+        "settings:",
+        settings
+      );
+      setShowWaypointNames(showNames);
+    } catch (e) {
+      console.error("[WAYPOINT NAMES] Ошибка загрузки настройки:", e);
+    }
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -1378,13 +1440,15 @@ export default function HomeScreen() {
                 />
               );
             })()}
-          {waypoints.map((pt, idx) => (
-            <Marker
-              key={`${pt.latitude}-${pt.longitude}-${idx}`}
-              coordinate={pt}
-              title={waypointNames[idx] || `Точка ${idx + 1}`}
-            />
-          ))}
+          {/* Обычные маркеры точек (скрываем, если включено отображение названий) */}
+          {!showWaypointNames &&
+            waypoints.map((pt, idx) => (
+              <Marker
+                key={`${pt.latitude}-${pt.longitude}-${idx}`}
+                coordinate={pt}
+                title={waypointNames[idx] || `Точка ${idx + 1}`}
+              />
+            ))}
           {!roadRouting && !riverRouting && waypoints.length >= 2 && (
             <Polyline
               coordinates={waypoints}
@@ -1448,6 +1512,41 @@ export default function HomeScreen() {
               </View>
             </Marker>
           ))}
+          {/* Маркеры с названиями точек (всегда поверх) */}
+          {showWaypointNames && waypoints.length > 0 && (
+            <>
+              {console.log(
+                "[WAYPOINT NAMES] Рендерим маркеры названий, showWaypointNames:",
+                showWaypointNames,
+                "waypoints.length:",
+                waypoints.length,
+                "waypointNames:",
+                waypointNames
+              )}
+              {waypoints.map((pt, idx) => {
+                const name = waypointNames[idx] || `Точка ${idx + 1}`;
+                console.log(
+                  `[WAYPOINT NAMES] Маркер ${idx}: "${name}" на координатах:`,
+                  pt
+                );
+                return (
+                  <Marker
+                    key={`wp-name-${idx}-${pt.latitude}-${pt.longitude}`}
+                    coordinate={{
+                      latitude: pt.latitude + 0.0001,
+                      longitude: pt.longitude,
+                    }}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                    zIndex={1000}
+                  >
+                    <View style={styles.distanceMarkerContainer}>
+                      <Text style={styles.distanceMarkerText}>{name}</Text>
+                    </View>
+                  </Marker>
+                );
+              })}
+            </>
+          )}
         </MapView>
       )}
 
