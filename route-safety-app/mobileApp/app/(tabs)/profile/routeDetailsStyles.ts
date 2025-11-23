@@ -1,0 +1,295 @@
+import { StyleSheet } from "react-native";
+
+export const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#f5f5f5",
+  },
+  content: {
+    paddingBottom: 320,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  errorText: {
+    fontSize: 18,
+    color: "#666",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0e0e0",
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginLeft: 8,
+  },
+  headerSpacer: {
+    width: 40,
+  },
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginHorizontal: 16,
+    marginTop: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  cardTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+    marginLeft: 12,
+  },
+  infoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f0f0f0",
+  },
+  infoLabel: {
+    fontSize: 16,
+    color: "#666",
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#333",
+  },
+  descriptionContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  descriptionLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#666",
+    marginBottom: 8,
+  },
+  descriptionText: {
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 24,
+  },
+  mapButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#34C759",
+    paddingVertical: 12,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  mapButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+    marginLeft: 8,
+  },
+  sectionContent: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  difficultyContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+  },
+  difficultyLabel: {
+    fontSize: 16,
+    color: "#666",
+    marginRight: 12,
+  },
+  difficultyScore: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  difficultyValue: {
+    fontSize: 32,
+    fontWeight: "bold",
+    color: "#007AFF",
+  },
+  difficultyMax: {
+    fontSize: 18,
+    color: "#999",
+    marginLeft: 4,
+  },
+  difficultyReasoning: {
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 24,
+    marginTop: 8,
+  },
+  statGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    flexWrap: "wrap",
+  },
+  statItem: {
+    alignItems: "center",
+    marginVertical: 12,
+    minWidth: 100,
+  },
+  statValue: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#007AFF",
+    marginBottom: 4,
+  },
+  statLabel: {
+    fontSize: 14,
+    color: "#666",
+  },
+  geographyText: {
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 24,
+    marginBottom: 12,
+  },
+  tagsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 8,
+  },
+  tag: {
+    backgroundColor: "#f0f7ff",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  tagText: {
+    fontSize: 14,
+    color: "#007AFF",
+  },
+  recommendationItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  recommendationText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 24,
+    marginLeft: 8,
+  },
+  warningItem: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  warningText: {
+    flex: 1,
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 24,
+    marginLeft: 8,
+  },
+  dayCard: {
+    backgroundColor: "#f8f8f8",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 12,
+  },
+  dayHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  dayNumber: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#333",
+  },
+  dayDate: {
+    fontSize: 14,
+    color: "#666",
+  },
+  dayStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  dayStatText: {
+    fontSize: 14,
+    color: "#666",
+    marginRight: 8,
+  },
+  dayDescription: {
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+  dayRecommendations: {
+    marginTop: 8,
+  },
+  dayRecommendationText: {
+    fontSize: 14,
+    color: "#666",
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  dayWeather: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#f0f0f0",
+  },
+  weatherRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  weatherText: {
+    fontSize: 14,
+    color: "#666",
+    marginLeft: 8,
+  },
+  rawAnalysisText: {
+    fontSize: 16,
+    color: "#333",
+    lineHeight: 24,
+  },
+  noAnalysisText: {
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    padding: 20,
+  },
+});
+

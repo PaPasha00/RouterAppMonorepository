@@ -4,6 +4,10 @@ import dotenv from 'dotenv';
 import elevationRoutes from './routes/elevationRoutes';
 import routeAnalysisRoutes from './routes/routeAnalysisRoutes';
 import mapRoutes from './routes/mapRoutes';
+import authRoutes from './routes/authRoutes';
+import routeRoutes from './routes/routeRoutes';
+// Инициализируем базу данных при запуске приложения
+import './database/db';
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -18,10 +22,12 @@ export function createApp(): express.Application {
   app.use(cors());
   app.use(express.json());
 
-  // Routes
-  app.use('/api', elevationRoutes);
-  app.use('/api', routeAnalysisRoutes);
-  app.use('/api/map', mapRoutes);
+  // Routes - порядок важен! Публичные маршруты должны быть перед защищенными
+  app.use('/api', authRoutes);
+  app.use('/api', routeAnalysisRoutes); // Публичный - анализ маршрута
+  app.use('/api', elevationRoutes); // Публичный - данные о высотах
+  app.use('/api/map', mapRoutes); // Публичный - карты
+  app.use('/api', routeRoutes); // Защищенный - требует авторизацию
 
   // Health check endpoint
   app.get('/health', (req, res) => {

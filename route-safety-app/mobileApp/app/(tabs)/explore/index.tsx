@@ -8,6 +8,7 @@ import {
   Alert,
   Platform,
   Modal,
+  TextInput,
 } from "react-native";
 import {
   getAnalysisResult,
@@ -21,6 +22,10 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { useMemo, useState, useEffect } from "react";
 import { API_CONFIG, getApiUrl, apiPost } from "../../../config/api";
 import { getElevationData } from "../home/helpers";
+import { saveRoute, saveRouteAnalysis } from "../../../services/routeService";
+import { isAuthenticated } from "../../../services/authService";
+import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 // Функция для получения эмодзи по условиям погоды
 function getWeatherEmoji(conditions: string): string {
@@ -64,9 +69,14 @@ function getTemperatureColor(min: number, max: number): string {
 }
 
 export default function ExploreScreen() {
+  const router = useRouter();
   const [refreshKey, setRefreshKey] = useState(0);
   const existing = getAnalysisResult();
   const route = getCurrentRoute();
+  const [saveRouteModalVisible, setSaveRouteModalVisible] = useState(false);
+  const [routeName, setRouteName] = useState("");
+  const [routeDescription, setRouteDescription] = useState("");
+  const [savingRoute, setSavingRoute] = useState(false);
 
   const [tourismType, setTourismType] = useState("пеший");
   const [startDateObj, setStartDateObj] = useState(new Date());
@@ -239,10 +249,28 @@ export default function ExploreScreen() {
         coordinates: `[${coords.length} points]`,
         elevationData: `[${elevations.length} values]`,
       });
-      const result = await apiPost<any>(
-        API_CONFIG.ENDPOINTS.ANALYZE_ROUTE,
-        body
-      );
+      let result;
+      try {
+        result = await apiPost<any>(
+          API_CONFIG.ENDPOINTS.ANALYZE_ROUTE,
+          body
+        );
+      } catch (error: any) {
+        console.error("[Explore ANALYZE] Full error:", error);
+        const errorMessage = error?.message || String(error);
+        if (errorMessage.includes("401")) {
+          Alert.alert(
+            "Ошибка авторизации",
+            "Проверьте подключение к серверу. Если проблема сохраняется, попробуйте перезапустить приложение."
+          );
+        } else {
+          Alert.alert(
+            "Ошибка",
+            errorMessage || "Не удалось запустить анализ. Проверьте доступность бэкенда."
+          );
+        }
+        throw error;
+      }
 
       // Логирование для проверки данных от ИИ
       console.log("[Explore ANALYZE] Response received:", {
@@ -283,6 +311,172 @@ export default function ExploreScreen() {
         "Ошибка",
         "Не удалось запустить анализ. Проверьте доступность бэкенда."
       );
+    }
+  };
+
+  const handleSaveRoute = async () => {
+    if (!route || !existing) {
+      Alert.alert("Ошибка", "Нет маршрута или анализа для сохранения");
+      return;
+    }
+
+    if (!routeName.trim()) {
+      Alert.alert("Ошибка", "Введите название маршрута");
+      return;
+    }
+
+    const authenticated = await isAuthenticated();
+    if (!authenticated) {
+      Alert.alert(
+        "Ошибка",
+        "Необходимо войти в систему для сохранения маршрута"
+      );
+      router.push("/(tabs)/profile");
+      return;
+    }
+
+    setSavingRoute(true);
+    try {
+      // Сохраняем маршрут
+      const savedRoute = await saveRoute({
+        name: routeName.trim(),
+        description: routeDescription.trim() || undefined,
+        coordinates: route.points,
+        waypointNames: {},
+        roadRouting: route.roadRouting,
+        riverRouting: route.riverRouting,
+        lengthKm: route.lengthKm,
+      });
+
+      // Сохраняем анализ, если он есть
+      if (existing) {
+      console.log("[Explore SAVE] Existing analysis structure:", {
+        hasAnalysis: !!existing.analysis,
+        analysisType: typeof existing.analysis,
+        analysisValue: typeof existing.analysis === 'string' ? existing.analysis.substring(0, 50) + '...' : existing.analysis,
+        hasStats: !!existing.stats,
+        statsType: typeof existing.stats,
+        statsKeys: existing.stats ? Object.keys(existing.stats) : null,
+        hasTerrainType: !!existing.terrainType,
+        terrainTypeValue: existing.terrainType,
+        hasGeographicContext: !!existing.geographicContext,
+        geographicContextType: typeof existing.geographicContext,
+        geographicContextKeys: existing.geographicContext ? Object.keys(existing.geographicContext) : null,
+        hasFormattedGeoContext: !!existing.formattedGeoContext,
+        formattedGeoContextType: typeof existing.formattedGeoContext,
+        formattedGeoContextValue: typeof existing.formattedGeoContext === 'string' ? existing.formattedGeoContext.substring(0, 100) : existing.formattedGeoContext,
+        hasDailyRoutes: !!existing.dailyRoutes,
+        dailyRoutesLength: existing.dailyRoutes?.length || 0,
+        hasTotalDays: typeof existing.totalDays === 'number',
+        totalDaysValue: existing.totalDays,
+        allKeys: Object.keys(existing),
+      });
+
+        // Убеждаемся, что анализ содержит все необходимые поля
+        let analysisText = existing.analysis;
+        if (!analysisText || typeof analysisText !== 'string' || analysisText.trim().length === 0) {
+          // Если analysis не строка или пустой, пытаемся преобразовать
+          if (existing.analysisStructured) {
+            analysisText = JSON.stringify(existing.analysisStructured, null, 2);
+          } else if (typeof existing.analysis === 'object' && existing.analysis !== null) {
+            analysisText = JSON.stringify(existing.analysis, null, 2);
+          } else {
+            // Если ничего не помогло, создаем базовое описание
+            analysisText = existing.analysisStructured?.summary?.difficultyReasoning || 
+                          "Анализ маршрута выполнен";
+          }
+        }
+
+        // Проверяем, что analysisText не пустой
+        if (!analysisText || analysisText.trim().length === 0) {
+          console.error("[Explore SAVE] analysisText пустой после обработки");
+          Alert.alert("Ошибка", "Не удалось подготовить данные анализа для сохранения");
+          return;
+        }
+
+        const analysisData = {
+          analysis: analysisText,
+          analysisStructured: existing.analysisStructured,
+          stats: existing.stats || {
+            avgSlope: 0,
+            maxSlope: 0,
+            steepSections: 0,
+            sinuosity: 1,
+            minElevation: 0,
+            maxElevation: 0,
+            elevationProfile: "Неизвестно",
+          },
+          terrainType: existing.terrainType || "неизвестно",
+          geographicContext: existing.geographicContext || {
+            countries: [],
+            regions: [],
+            areas: [],
+            localities: [],
+            multiRegion: false,
+            multiCountry: false,
+            totalPointsAnalyzed: 0,
+          },
+          formattedGeoContext: existing.formattedGeoContext || (existing.geographicContext ? JSON.stringify(existing.geographicContext) : "Неизвестно"),
+          dailyRoutes: existing.dailyRoutes || [],
+          totalDays: existing.totalDays || (existing.dailyRoutes?.length || 1),
+        };
+
+        console.log("[Explore SAVE] Prepared analysis data:", {
+          hasAnalysis: !!analysisData.analysis && analysisData.analysis.length > 0,
+          hasStats: !!analysisData.stats,
+          hasTerrainType: !!analysisData.terrainType && analysisData.terrainType.length > 0,
+          hasGeographicContext: !!analysisData.geographicContext,
+          hasFormattedGeoContext: !!analysisData.formattedGeoContext && analysisData.formattedGeoContext.length > 0,
+          dailyRoutesCount: analysisData.dailyRoutes.length,
+          totalDays: analysisData.totalDays,
+        });
+
+        // Проверяем, что все обязательные поля заполнены
+        if (!analysisData.analysis || analysisData.analysis.length === 0) {
+          Alert.alert("Ошибка", "Анализ не содержит текстового описания");
+          return;
+        }
+        if (!analysisData.stats) {
+          Alert.alert("Ошибка", "Анализ не содержит статистики");
+          return;
+        }
+        if (!analysisData.terrainType || analysisData.terrainType.length === 0) {
+          Alert.alert("Ошибка", "Анализ не содержит типа местности");
+          return;
+        }
+        if (!analysisData.geographicContext) {
+          Alert.alert("Ошибка", "Анализ не содержит географического контекста");
+          return;
+        }
+
+        try {
+          await saveRouteAnalysis(
+            savedRoute.id,
+            analysisData,
+            startDate,
+            endDate,
+            tourismType
+          );
+        } catch (error: any) {
+          console.error("[Explore SAVE] Error saving analysis:", error);
+          throw error;
+        }
+      }
+
+      Alert.alert("Успех", "Маршрут сохранен", [
+        {
+          text: "OK",
+          onPress: () => {
+            setSaveRouteModalVisible(false);
+            setRouteName("");
+            setRouteDescription("");
+          },
+        },
+      ]);
+    } catch (error: any) {
+      Alert.alert("Ошибка", error.message || "Ошибка при сохранении маршрута");
+    } finally {
+      setSavingRoute(false);
     }
   };
 
@@ -455,6 +649,22 @@ export default function ExploreScreen() {
               <Text style={styles.progressText}>
                 {loadingProgress}% • {loadingSteps[loadingStep]}
               </Text>
+            </View>
+          )}
+
+          {/* Кнопка Сохранить маршрут (показывается после анализа) */}
+          {existing && route && (
+            <View style={{ paddingHorizontal: 4, marginTop: 12 }}>
+              <TouchableOpacity
+                onPress={() => setSaveRouteModalVisible(true)}
+                style={[
+                  styles.analyzePrimaryButton,
+                  { backgroundColor: "#34C759", flexDirection: "row", alignItems: "center", justifyContent: "center" },
+                ]}
+              >
+                <Ionicons name="save-outline" size={20} color="#fff" style={{ marginRight: 8 }} />
+                <Text style={styles.analyzePrimaryText}>Сохранить маршрут</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -968,6 +1178,134 @@ export default function ExploreScreen() {
           </View>
         </Modal>
       )}
+
+      {/* Модальное окно сохранения маршрута */}
+      <Modal
+        visible={saveRouteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSaveRouteModalVisible(false)}
+      >
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#fff",
+              borderRadius: 16,
+              padding: 24,
+              width: "100%",
+              maxWidth: 400,
+            }}
+          >
+            <Text
+              style={{
+                fontSize: 20,
+                fontWeight: "bold",
+                marginBottom: 20,
+                color: "#333",
+              }}
+            >
+              Сохранить маршрут
+            </Text>
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 }}>
+                Название маршрута *
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: "#f5f5f5",
+                  borderWidth: 1,
+                  borderColor: "#ddd",
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 16,
+                  color: "#333",
+                }}
+                placeholder="Введите название"
+                value={routeName}
+                onChangeText={setRouteName}
+                autoFocus
+              />
+            </View>
+            <View style={{ marginBottom: 20 }}>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: "#333", marginBottom: 8 }}>
+                Описание (необязательно)
+              </Text>
+              <TextInput
+                style={{
+                  backgroundColor: "#f5f5f5",
+                  borderWidth: 1,
+                  borderColor: "#ddd",
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  fontSize: 16,
+                  color: "#333",
+                  minHeight: 80,
+                  textAlignVertical: "top",
+                }}
+                placeholder="Введите описание маршрута"
+                value={routeDescription}
+                onChangeText={setRouteDescription}
+                multiline
+                numberOfLines={4}
+              />
+            </View>
+            <View style={{ flexDirection: "row", gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSaveRouteModalVisible(false);
+                  setRouteName("");
+                  setRouteDescription("");
+                }}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  borderRadius: 8,
+                  backgroundColor: "#f0f0f0",
+                  alignItems: "center",
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: "600", color: "#666" }}>
+                  Отмена
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveRoute}
+                style={[
+                  {
+                    flex: 1,
+                    paddingVertical: 12,
+                    borderRadius: 8,
+                    backgroundColor: "#34C759",
+                    alignItems: "center",
+                    flexDirection: "row",
+                    justifyContent: "center",
+                  },
+                  savingRoute && { opacity: 0.6 },
+                ]}
+                disabled={savingRoute}
+              >
+                {savingRoute ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: "#fff" }}>
+                    Сохранить
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

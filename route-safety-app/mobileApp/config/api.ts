@@ -50,9 +50,29 @@ export function getApiUrl(endpoint: string, params?: Record<string, string | num
 }
 
 export async function apiPost<T>(endpoint: string, body: unknown, init?: RequestInit): Promise<T> {
+  // Добавляем токен авторизации, если он есть
+  const headers: HeadersInit = { "Content-Type": "application/json", ...(init?.headers || {}) };
+  
+  // Пытаемся получить токен из authService, если он доступен
+  // НЕ добавляем токен для публичных эндпоинтов (analyze-route, elevation)
+  const publicEndpoints = ["/api/analyze-route", "/api/elevation"];
+  const isPublicEndpoint = publicEndpoints.some(ep => endpoint.includes(ep));
+  
+  if (!isPublicEndpoint) {
+    try {
+      const { getToken } = await import("../services/authService");
+      const token = await getToken();
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+      }
+    } catch (e) {
+      // Игнорируем ошибки, если authService недоступен
+    }
+  }
+
   const res = await fetch(getApiUrl(endpoint), {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(init?.headers || {}) },
+    headers,
     body: JSON.stringify(body ?? {}),
     ...init,
   });

@@ -40,16 +40,25 @@ import { Ionicons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { apiPost, API_CONFIG, getApiUrl } from "../../../config/api";
 import { router, useFocusEffect } from "expo-router";
-import { setAnalysisResult } from "../../../store/analysisStore";
+import {
+  setAnalysisResult,
+  getAnalysisResult,
+} from "../../../store/analysisStore";
 import { getElevationData } from "./helpers";
-import { setCurrentRoute } from "../../../store/routeStore";
-import { clearCurrentRoute } from "../../../store/routeStore";
+import {
+  setCurrentRoute,
+  clearCurrentRoute,
+  getRouteToLoad,
+  clearRouteToLoad,
+} from "../../../store/routeStore";
 import { clearAnalysisResult } from "../../../store/analysisStore";
 import {
   getSettings,
   saveSettings,
   clearSettingsCache,
 } from "../../../store/settingsStore";
+import { saveRoute, saveRouteAnalysis } from "../../../services/routeService";
+import { isAuthenticated } from "../../../services/authService";
 
 // Тип карты (локально, так как больше не в настройках)
 type MapType = "osm" | "yandex" | "google-satellite" | "2gis" | "apple";
@@ -663,6 +672,10 @@ export default function HomeScreen() {
   const [analysisDone, setAnalysisDone] = useState(false);
   const [showStartDatePicker, setShowStartDatePicker] = useState(false);
   const [showEndDatePicker, setShowEndDatePicker] = useState(false);
+  const [saveRouteModalVisible, setSaveRouteModalVisible] = useState(false);
+  const [routeName, setRouteName] = useState("");
+  const [routeDescription, setRouteDescription] = useState("");
+  const [savingRoute, setSavingRoute] = useState(false);
   const [tourismType, setTourismType] = useState("пеший");
   const [startDate, setStartDate] = useState(
     new Date().toISOString().slice(0, 10)
@@ -771,6 +784,61 @@ export default function HomeScreen() {
       setLocation(current);
     })();
   }, []);
+
+  // Загрузка сохраненного маршрута, если он был установлен
+  useFocusEffect(
+    useCallback(() => {
+      const routeToLoad = getRouteToLoad();
+      if (routeToLoad && routeToLoad.points.length > 0) {
+        console.log("[HOME] Загружаем сохраненный маршрут:", {
+          points: routeToLoad.points.length,
+          roadRouting: routeToLoad.roadRouting,
+          riverRouting: routeToLoad.riverRouting,
+        });
+
+        // Устанавливаем точки маршрута
+        setWaypoints(routeToLoad.points);
+
+        // Устанавливаем названия точек, если они есть
+        if (routeToLoad.waypointNames) {
+          setWaypointNames(routeToLoad.waypointNames);
+        }
+
+        // Устанавливаем тип маршрутизации
+        setRoadRouting(routeToLoad.roadRouting);
+        setRiverRouting(routeToLoad.riverRouting);
+
+        // Центрируем карту на маршруте
+        if (routeToLoad.points.length > 0) {
+          const lats = routeToLoad.points.map((p) => p.latitude);
+          const lngs = routeToLoad.points.map((p) => p.longitude);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+
+          const latDelta = (maxLat - minLat) * 1.5;
+          const lngDelta = (maxLng - minLng) * 1.5;
+
+          // Небольшая задержка для того, чтобы карта была готова
+          setTimeout(() => {
+            mapRef.current?.animateToRegion(
+              {
+                latitude: (minLat + maxLat) / 2,
+                longitude: (minLng + maxLng) / 2,
+                latitudeDelta: Math.max(latDelta, 0.01),
+                longitudeDelta: Math.max(lngDelta, 0.01),
+              },
+              500
+            );
+          }, 100);
+        }
+
+        // Очищаем маршрут для загрузки
+        clearRouteToLoad();
+      }
+    }, [])
+  );
 
   const initialRegion = useMemo(
     () => ({
@@ -1053,6 +1121,64 @@ export default function HomeScreen() {
   const goToResults = () => {
     setAnalyzeOpen(false);
     router.push("/(tabs)/explore");
+  };
+
+  const handleSaveRoute = async () => {
+    if (!routeName.trim()) {
+      Alert.alert("Ошибка", "Введите название маршрута");
+      return;
+    }
+
+    const authenticated = await isAuthenticated();
+    if (!authenticated) {
+      Alert.alert(
+        "Ошибка",
+        "Необходимо войти в систему для сохранения маршрута"
+      );
+      router.push("/(tabs)/profile");
+      return;
+    }
+
+    setSavingRoute(true);
+    try {
+      // Сохраняем маршрут
+      const savedRoute = await saveRoute({
+        name: routeName.trim(),
+        description: routeDescription.trim() || undefined,
+        coordinates: waypoints,
+        waypointNames: waypointNames,
+        roadRouting,
+        riverRouting,
+        lengthKm: info?.lengthKm || 0,
+      });
+
+      // Сохраняем анализ, если он есть
+      const analysis = getAnalysisResult();
+      if (analysis) {
+        await saveRouteAnalysis(
+          savedRoute.id,
+          analysis,
+          startDate,
+          endDate,
+          tourismType
+        );
+      }
+
+      Alert.alert("Успех", "Маршрут сохранен", [
+        {
+          text: "OK",
+          onPress: () => {
+            setSaveRouteModalVisible(false);
+            setRouteName("");
+            setRouteDescription("");
+          },
+        },
+      ]);
+    } catch (error: any) {
+      Alert.alert("Ошибка", error.message || "Ошибка при сохранении маршрута");
+    } finally {
+      setSavingRoute(false);
+    }
   };
 
   const handleStartDateChange = (event: any, selectedDate?: Date) => {
@@ -1982,14 +2108,34 @@ export default function HomeScreen() {
                   >
                     <Text style={styles.cancelButtonText}>Закрыть</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={goToResults}
-                    style={styles.analyzePrimaryButton}
-                  >
-                    <Text style={styles.analyzePrimaryText}>
-                      Смотреть результаты
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => setSaveRouteModalVisible(true)}
+                      style={[
+                        styles.analyzePrimaryButton,
+                        {
+                          flex: 1,
+                          flexDirection: "row",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name="save-outline"
+                        size={20}
+                        color="#fff"
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={styles.analyzePrimaryText}>Сохранить</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={goToResults}
+                      style={[styles.analyzePrimaryButton, { flex: 1 }]}
+                    >
+                      <Text style={styles.analyzePrimaryText}>Результаты</Text>
+                    </TouchableOpacity>
+                  </View>
                 </>
               )}
             </View>
@@ -2145,6 +2291,78 @@ export default function HomeScreen() {
                 </View>
               </>
             )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      {/* Модальное окно сохранения маршрута */}
+      <Modal
+        visible={saveRouteModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSaveRouteModalVisible(false)}
+      >
+        <Pressable
+          style={styles.modalBackdrop}
+          onPress={() => setSaveRouteModalVisible(false)}
+        >
+          <Pressable
+            style={styles.modalCard}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={styles.modalTitle}>Сохранить маршрут</Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Название маршрута *</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="Введите название"
+                  value={routeName}
+                  onChangeText={setRouteName}
+                  autoFocus
+                />
+              </View>
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Описание (необязательно)</Text>
+                <TextInput
+                  style={[
+                    styles.formInput,
+                    { minHeight: 80, textAlignVertical: "top" },
+                  ]}
+                  placeholder="Введите описание маршрута"
+                  value={routeDescription}
+                  onChangeText={setRouteDescription}
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </ScrollView>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSaveRouteModalVisible(false);
+                  setRouteName("");
+                  setRouteDescription("");
+                }}
+                style={styles.cancelButton}
+              >
+                <Text style={styles.cancelButtonText}>Отмена</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSaveRoute}
+                style={[
+                  styles.analyzePrimaryButton,
+                  savingRoute && styles.analyzePrimaryButtonDisabled,
+                ]}
+                disabled={savingRoute}
+              >
+                {savingRoute ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.analyzePrimaryText}>Сохранить</Text>
+                )}
+              </TouchableOpacity>
+            </View>
           </Pressable>
         </Pressable>
       </Modal>

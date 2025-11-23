@@ -7,7 +7,15 @@ export type CurrentRoute = {
   lengthKm: number;
 } | null;
 
+export type RouteToLoad = {
+  points: LatLng[];
+  roadRouting: boolean;
+  riverRouting: boolean;
+  waypointNames?: Record<number, string>;
+} | null;
+
 let currentRoute: CurrentRoute = null;
+let routeToLoad: RouteToLoad = null;
 
 export function setCurrentRoute(route: CurrentRoute) {
   currentRoute = route;
@@ -19,4 +27,16 @@ export function getCurrentRoute(): CurrentRoute {
 
 export function clearCurrentRoute() {
   currentRoute = null;
+}
+
+export function setRouteToLoad(route: RouteToLoad) {
+  routeToLoad = route;
+}
+
+export function getRouteToLoad(): RouteToLoad {
+  return routeToLoad;
+}
+
+export function clearRouteToLoad() {
+  routeToLoad = null;
 }
