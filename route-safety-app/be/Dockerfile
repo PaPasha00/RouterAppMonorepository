@@ -5,7 +5,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Копируем package.json и package-lock.json
-COPY package*.json ./
+COPY package.json package-lock.json ./
 
 # Устанавливаем все зависимости (включая devDependencies для сборки)
 RUN npm ci
