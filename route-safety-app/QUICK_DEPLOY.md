@@ -25,7 +25,24 @@
 
 ### 3. Настройте сервис
 
-После того как Railway подключит ваш репозиторий, он автоматически создаст сервис. Теперь нужно настроить его:
+**✅ Способ 1: Использовать Railway Config File (рекомендуется)**
+
+В репозитории уже есть файл `be/railway.json`, который автоматически настроит все параметры! Railway обнаружит его автоматически.
+
+**Что нужно сделать:**
+
+1. **Убедитесь, что Root Directory установлен в `be`:**
+   - Откройте сервис в Railway
+   - Перейдите в **Settings** → **Build & Deploy**
+   - Установите **Root Directory** = `be`
+   - Это единственная настройка, которую нужно указать вручную
+
+2. **Railway автоматически использует `be/railway.json`:**
+   - Build Command: `npm install && npm run build`
+   - Start Command: `npm start`
+   - Builder: NIXPACKS
+
+**✅ Способ 2: Ручная настройка (если не хотите использовать config file)**
 
 1. **Откройте созданный сервис** (кликните на него в списке проектов)
 
@@ -36,35 +53,17 @@
 
 3. **Найдите раздел "Build & Deploy"** и настройте:
 
-   - **Root Directory**:
-
-     - Найдите поле **"Root Directory"** или **"Source"**
-     - Введите: `be`
-     - Это говорит Railway, что бэкенд находится в папке `be`, а не в корне репозитория
-
-   - **Build Command**:
-
-     - Найдите поле **"Build Command"**
-     - Введите: `npm install && npm run build`
-     - Это команда, которая выполнится при сборке проекта
-
-   - **Start Command**:
-     - Найдите поле **"Start Command"** или **"Run Command"**
-     - Введите: `npm start`
-     - Это команда, которая запустит ваш сервер после сборки
+   - **Root Directory**: `be`
+   - **Build Command**: `npm install && npm run build`
+   - **Start Command**: `npm start`
 
 4. **Сохраните изменения** (Railway обычно сохраняет автоматически)
 
 **💡 Важно:**
 
-- Если вы не видите эти поля сразу, Railway может автоматически определить их. В этом случае просто убедитесь, что **Root Directory** установлен в `be`.
+- **Railway Config File (`be/railway.json`)** автоматически настроит все команды - это самый надежный способ!
 - Если Railway не находит `package.json`, он может попросить выбрать тип сервиса - выберите **"Node.js"** или **"Nixpacks"**.
-
-**📍 Где искать настройки:**
-
-- Вкладка **"Settings"** в верхней панели сервиса
-- Или через меню сервиса (три точки ⋮) → **"Settings"**
-- Раздел **"Build & Deploy"** или **"Deploy"**
+- Главное - убедитесь, что **Root Directory** = `be` в настройках Railway.
 
 ### 4. Добавьте переменные окружения
 
@@ -96,10 +95,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 Это означает, что Railway не определил Node.js проект. Решение:
 
 1. **Убедитесь, что Root Directory установлен в `be`** (см. шаг 3)
-2. **В репозитории уже есть файл `be/nixpacks.toml`** - он явно указывает Railway, что это Node.js проект
+2. **В репозитории есть два конфигурационных файла:**
+   - `be/railway.json` - основной конфигурационный файл Railway
+   - `be/nixpacks.toml` - конфигурация для Nixpacks builder
 3. **Если ошибка все еще есть:**
    - В настройках Railway → **Settings** → **Build & Deploy**
-   - Найдите поле **"Nixpacks Config"** или **"Buildpack"**
+   - Убедитесь, что **Root Directory** = `be`
+   - Найдите поле **"Builder"** или **"Buildpack"**
    - Убедитесь, что выбран **"Nixpacks"** (не Docker)
    - Или явно укажите: **"Node.js"** в типе сервиса
 4. **Перезапустите деплой** (кнопка **"Redeploy"**)
@@ -313,21 +315,25 @@ EXPO_PUBLIC_API_BASE_URL=https://your-deployed-api-url.com npx expo prebuild --p
 **Решение:**
 
 1. **Проверьте Root Directory:**
+
    - В Railway → Settings → Build & Deploy
    - Убедитесь, что **Root Directory** = `be`
    - Это критически важно! Railway должен искать `package.json` в папке `be`
 
 2. **Файл `nixpacks.toml` уже создан:**
+
    - В репозитории есть файл `be/nixpacks.toml`
    - Он явно указывает Railway использовать Node.js 20
    - Убедитесь, что этот файл закоммичен в Git
 
 3. **Проверьте тип сервиса:**
+
    - В Railway → Settings
    - Убедитесь, что выбран **"Nixpacks"** (не Docker)
    - Или явно выберите **"Node.js"**
 
 4. **Перезапустите деплой:**
+
    - Нажмите **"Redeploy"** в Railway
    - Или сделайте новый коммит в Git (Railway автоматически перезапустит)
 
