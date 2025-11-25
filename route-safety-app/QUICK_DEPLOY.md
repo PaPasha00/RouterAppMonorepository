@@ -31,12 +31,18 @@
 
 **Что нужно сделать:**
 
-1. **Убедитесь, что Root Directory установлен в `be`:**
+1. **⚠️ КРИТИЧЕСКИ ВАЖНО: Установите Root Directory в `be`:**
 
    - Откройте сервис в Railway
    - Перейдите в **Settings** → **Build & Deploy**
-   - Установите **Root Directory** = `be`
+   - Найдите поле **"Root Directory"** или **"Source Root"**
+   - **Установите значение: `be`** (без слешей, без точек, просто `be`)
    - Это единственная настройка, которую нужно указать вручную
+   - **Без этого Railway не найдет Dockerfile и package.json!**
+   
+   **Если Root Directory не установлен в `be`, вы получите ошибку:**
+   - `"/package.json": not found`
+   - `"Dockerfile does not exist"`
 
 2. **Railway автоматически использует конфигурацию:**
 
