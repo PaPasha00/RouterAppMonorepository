@@ -39,8 +39,9 @@
    - **Установите значение: `be`** (без слешей, без точек, просто `be`)
    - Это единственная настройка, которую нужно указать вручную
    - **Без этого Railway не найдет Dockerfile и package.json!**
-   
+
    **Если Root Directory не установлен в `be`, вы получите ошибку:**
+
    - `"/package.json": not found`
    - `"Dockerfile does not exist"`
 
