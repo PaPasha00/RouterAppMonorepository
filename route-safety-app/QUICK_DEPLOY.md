@@ -39,12 +39,13 @@
    - Это единственная настройка, которую нужно указать вручную
 
 2. **Railway автоматически использует конфигурацию:**
+
    - `be/railway.json` - указывает использовать NIXPACKS builder
    - `be/nixpacks.toml` - явно указывает Node.js 20 и команды сборки
    - `be/.nvmrc` - указывает версию Node.js 20
    - `be/package.json` - содержит engines с версией Node.js
    - Builder: NIXPACKS (автоматически определит Node.js проект)
-   
+
    **⚠️ КРИТИЧЕСКИ ВАЖНО:** Убедитесь, что в Railway → Settings → Build & Deploy → **Root Directory** = `be`
 
 **✅ Способ 2: Ручная настройка (если не хотите использовать config file)**
