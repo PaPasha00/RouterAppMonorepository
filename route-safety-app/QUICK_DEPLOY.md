@@ -32,6 +32,7 @@
 **Что нужно сделать:**
 
 1. **Убедитесь, что Root Directory установлен в `be`:**
+
    - Откройте сервис в Railway
    - Перейдите в **Settings** → **Build & Deploy**
    - Установите **Root Directory** = `be`
