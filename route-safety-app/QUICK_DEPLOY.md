@@ -38,10 +38,10 @@
    - Установите **Root Directory** = `be`
    - Это единственная настройка, которую нужно указать вручную
 
-2. **Railway автоматически использует `be/railway.json`:**
-   - Build Command: `npm install && npm run build`
-   - Start Command: `npm start`
-   - Builder: NIXPACKS
+2. **Railway автоматически использует конфигурацию:**
+   - `be/railway.json` - указывает использовать Dockerfile builder
+   - `be/Dockerfile` - содержит все инструкции для сборки (Node.js 20, npm install, build, start)
+   - Builder: DOCKERFILE (использует официальный образ Node.js 20)
 
 **✅ Способ 2: Ручная настройка (если не хотите использовать config file)**
 
