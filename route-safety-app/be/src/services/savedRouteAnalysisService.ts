@@ -54,6 +54,19 @@ export function createRouteAnalysis(data: CreateAnalysisData): SavedRouteAnalysi
     createdAt: now,
   };
 
+  // Логирование для проверки сохранения погоды
+  console.log('[SAVE ANALYSIS SERVICE] Saving analysis with dailyRoutes:', {
+    dailyRoutesCount: analysis.dailyRoutes ? (Array.isArray(analysis.dailyRoutes) ? analysis.dailyRoutes.length : 0) : 0,
+    firstDayWeather: analysis.dailyRoutes && Array.isArray(analysis.dailyRoutes) && analysis.dailyRoutes.length > 0
+      ? {
+          day: analysis.dailyRoutes[0].day,
+          date: analysis.dailyRoutes[0].date,
+          hasWeather: !!analysis.dailyRoutes[0].weather,
+          weatherData: analysis.dailyRoutes[0].weather,
+        }
+      : null,
+  });
+
   const stmt = db.prepare(`
     INSERT INTO route_analyses (
       id, routeId, userId, analysis, analysisStructured, stats,
@@ -117,6 +130,28 @@ export function deleteRouteAnalysis(analysisId: string, userId: string): boolean
  * Преобразует строку БД в объект SavedRouteAnalysis
  */
 function rowToAnalysis(row: any): SavedRouteAnalysis {
+  let dailyRoutes;
+  try {
+    dailyRoutes = row.dailyRoutes ? JSON.parse(row.dailyRoutes) : undefined;
+    
+    // Логирование для проверки данных о погоде
+    if (dailyRoutes && Array.isArray(dailyRoutes) && dailyRoutes.length > 0) {
+      console.log('[LOAD ANALYSIS] Parsed dailyRoutes:', {
+        count: dailyRoutes.length,
+        firstDayWeather: dailyRoutes[0].weather ? {
+          hasWeather: true,
+          temperature: dailyRoutes[0].weather.temperature,
+          conditions: dailyRoutes[0].weather.conditions,
+          precipitation: dailyRoutes[0].weather.precipitation,
+          windSpeed: dailyRoutes[0].weather.windSpeed,
+        } : { hasWeather: false },
+      });
+    }
+  } catch (error) {
+    console.error('[LOAD ANALYSIS] Error parsing dailyRoutes:', error);
+    dailyRoutes = undefined;
+  }
+
   return {
     id: row.id,
     routeId: row.routeId,
@@ -127,7 +162,7 @@ function rowToAnalysis(row: any): SavedRouteAnalysis {
     terrainType: row.terrainType,
     geographicContext: JSON.parse(row.geographicContext),
     formattedGeoContext: row.formattedGeoContext,
-    dailyRoutes: row.dailyRoutes ? JSON.parse(row.dailyRoutes) : undefined,
+    dailyRoutes,
     totalDays: row.totalDays,
     startDate: row.startDate,
     endDate: row.endDate,

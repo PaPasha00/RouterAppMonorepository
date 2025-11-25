@@ -33,6 +33,17 @@ export default function RouteDetailsScreen() {
       const result = await getRoute(id);
       setRoute(result.route);
       if (result.analysis) {
+        console.log('[ROUTE DETAILS] Loaded analysis:', {
+          hasDailyRoutes: !!result.analysis.dailyRoutes,
+          dailyRoutesCount: result.analysis.dailyRoutes ? (Array.isArray(result.analysis.dailyRoutes) ? result.analysis.dailyRoutes.length : 0) : 0,
+          firstDayWeather: result.analysis.dailyRoutes && Array.isArray(result.analysis.dailyRoutes) && result.analysis.dailyRoutes.length > 0
+            ? {
+                day: result.analysis.dailyRoutes[0].day,
+                hasWeather: !!result.analysis.dailyRoutes[0].weather,
+                weatherData: result.analysis.dailyRoutes[0].weather,
+              }
+            : null,
+        });
         setAnalysis(result.analysis);
       }
     } catch (error: any) {
@@ -77,9 +88,17 @@ export default function RouteDetailsScreen() {
 
   const structuredAnalysis = analysis?.analysisStructured;
   // Используем dailyRoutes из анализа, если они есть, иначе из structuredAnalysis.days
-  const daysWithWeather = analysis?.dailyRoutes && analysis.dailyRoutes.length > 0 
+  const daysWithWeather = analysis?.dailyRoutes && Array.isArray(analysis.dailyRoutes) && analysis.dailyRoutes.length > 0 
     ? analysis.dailyRoutes 
     : structuredAnalysis?.days || [];
+  
+  // Логирование для отладки
+  console.log('[ROUTE DETAILS] daysWithWeather:', {
+    source: analysis?.dailyRoutes && analysis.dailyRoutes.length > 0 ? 'dailyRoutes' : 'structuredAnalysis.days',
+    count: daysWithWeather.length,
+    firstDayHasWeather: daysWithWeather.length > 0 ? !!daysWithWeather[0].weather : false,
+    firstDayWeatherData: daysWithWeather.length > 0 && daysWithWeather[0].weather ? daysWithWeather[0].weather : null,
+  });
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -348,11 +367,11 @@ export default function RouteDetailsScreen() {
                         </View>
                         <View style={styles.dayStats}>
                           <Text style={styles.dayStatText}>
-                            {day.distanceKm?.toFixed(2) || "N/A"} км
+                            {day.distanceKm?.toFixed(2) || day.distance?.toFixed(2) || "N/A"} км
                           </Text>
                           <Text style={styles.dayStatText}>•</Text>
                           <Text style={styles.dayStatText}>
-                            {day.elevationGainM?.toFixed(0) || "N/A"} м
+                            {day.elevationGainM?.toFixed(0) || day.elevationGain?.toFixed(0) || "N/A"} м
                           </Text>
                         </View>
                         {day.weather && (
@@ -360,7 +379,7 @@ export default function RouteDetailsScreen() {
                             <View style={styles.weatherRow}>
                               <Ionicons name="thermometer" size={16} color="#FF9500" />
                               <Text style={styles.weatherText}>
-                                {day.weather.temperatureMin || day.weather.temperature?.min || "—"}° / {day.weather.temperatureMax || day.weather.temperature?.max || "—"}°
+                                {day.weather.temperature?.min ?? day.weather.temperatureMin ?? "—"}° / {day.weather.temperature?.max ?? day.weather.temperatureMax ?? "—"}°
                               </Text>
                             </View>
                             {(day.weather.conditions || day.weather.description) && (
@@ -371,7 +390,7 @@ export default function RouteDetailsScreen() {
                                 </Text>
                               </View>
                             )}
-                            {day.weather.precipitation !== undefined && day.weather.precipitation > 0 && (
+                            {(day.weather.precipitation !== undefined && day.weather.precipitation !== null) && (
                               <View style={styles.weatherRow}>
                                 <Ionicons name="rainy" size={16} color="#5AC8FA" />
                                 <Text style={styles.weatherText}>
@@ -379,7 +398,7 @@ export default function RouteDetailsScreen() {
                                 </Text>
                               </View>
                             )}
-                            {day.weather.windSpeed !== undefined && day.weather.windSpeed > 0 && (
+                            {(day.weather.windSpeed !== undefined && day.weather.windSpeed !== null) && (
                               <View style={styles.weatherRow}>
                                 <Ionicons name="flag" size={16} color="#8E8E93" />
                                 <Text style={styles.weatherText}>

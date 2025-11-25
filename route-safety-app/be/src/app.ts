@@ -19,7 +19,14 @@ export function createApp(): express.Application {
   const app = express();
 
   // Middleware
-  app.use(cors());
+  // Настройка CORS из переменных окружения
+  const corsOptions = {
+    origin: process.env.CORS_ORIGIN 
+      ? process.env.CORS_ORIGIN.split(',').map(origin => origin.trim())
+      : '*', // По умолчанию разрешаем все (для разработки)
+    credentials: true,
+  };
+  app.use(cors(corsOptions));
   app.use(express.json());
 
   // Routes - порядок важен! Публичные маршруты должны быть перед защищенными

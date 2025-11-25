@@ -200,6 +200,16 @@ export async function saveRouteAnalysis(req: AuthRequest, res: Response): Promis
       hasFormattedGeoContext: !!analysis?.formattedGeoContext,
       formattedGeoContextValue: analysis?.formattedGeoContext,
       formattedGeoContextType: typeof analysis?.formattedGeoContext,
+      hasDailyRoutes: !!analysis?.dailyRoutes,
+      dailyRoutesCount: analysis?.dailyRoutes ? (Array.isArray(analysis.dailyRoutes) ? analysis.dailyRoutes.length : 0) : 0,
+      firstDayWeather: analysis?.dailyRoutes && Array.isArray(analysis.dailyRoutes) && analysis.dailyRoutes.length > 0
+        ? {
+            hasWeather: !!analysis.dailyRoutes[0].weather,
+            weatherKeys: analysis.dailyRoutes[0].weather ? Object.keys(analysis.dailyRoutes[0].weather) : null,
+            temperature: analysis.dailyRoutes[0].weather?.temperature,
+            conditions: analysis.dailyRoutes[0].weather?.conditions,
+          }
+        : null,
     });
 
     // Проверяем обязательные поля с более детальными сообщениями

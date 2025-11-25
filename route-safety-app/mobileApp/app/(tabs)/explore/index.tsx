@@ -429,6 +429,14 @@ export default function ExploreScreen() {
           hasFormattedGeoContext: !!analysisData.formattedGeoContext && analysisData.formattedGeoContext.length > 0,
           dailyRoutesCount: analysisData.dailyRoutes.length,
           totalDays: analysisData.totalDays,
+          dailyRoutesWithWeather: analysisData.dailyRoutes.filter((d: any) => d.weather).length,
+          firstDayWeather: analysisData.dailyRoutes[0]?.weather ? {
+            hasWeather: true,
+            temperature: analysisData.dailyRoutes[0].weather.temperature,
+            conditions: analysisData.dailyRoutes[0].weather.conditions,
+            precipitation: analysisData.dailyRoutes[0].weather.precipitation,
+            windSpeed: analysisData.dailyRoutes[0].weather.windSpeed,
+          } : { hasWeather: false },
         });
 
         // Проверяем, что все обязательные поля заполнены

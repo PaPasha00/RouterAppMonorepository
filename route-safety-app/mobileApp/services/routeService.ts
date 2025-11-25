@@ -113,7 +113,54 @@ export async function getRoute(routeId: string): Promise<{ route: SavedRoute; an
     throw new Error(error.error || 'Ошибка получения маршрута');
   }
 
-  return await response.json();
+  const result = await response.json();
+  
+  // Парсим JSON строки из базы данных
+  if (result.analysis) {
+    return {
+      route: {
+        ...result.route,
+        coordinates: typeof result.route.coordinates === 'string' 
+          ? JSON.parse(result.route.coordinates) 
+          : result.route.coordinates,
+        waypointNames: typeof result.route.waypointNames === 'string'
+          ? JSON.parse(result.route.waypointNames || '{}')
+          : result.route.waypointNames || {},
+      },
+      analysis: {
+        ...result.analysis,
+        analysisStructured: result.analysis.analysisStructured 
+          ? (typeof result.analysis.analysisStructured === 'string' 
+              ? JSON.parse(result.analysis.analysisStructured) 
+              : result.analysis.analysisStructured)
+          : undefined,
+        stats: typeof result.analysis.stats === 'string' 
+          ? JSON.parse(result.analysis.stats) 
+          : result.analysis.stats,
+        geographicContext: typeof result.analysis.geographicContext === 'string'
+          ? JSON.parse(result.analysis.geographicContext)
+          : result.analysis.geographicContext,
+        dailyRoutes: result.analysis.dailyRoutes
+          ? (typeof result.analysis.dailyRoutes === 'string'
+              ? JSON.parse(result.analysis.dailyRoutes)
+              : result.analysis.dailyRoutes)
+          : undefined,
+      },
+    };
+  }
+  
+  return {
+    route: {
+      ...result.route,
+      coordinates: typeof result.route.coordinates === 'string' 
+        ? JSON.parse(result.route.coordinates) 
+        : result.route.coordinates,
+      waypointNames: typeof result.route.waypointNames === 'string'
+        ? JSON.parse(result.route.waypointNames || '{}')
+        : result.route.waypointNames || {},
+    },
+    analysis: result.analysis,
+  };
 }
 
 /**

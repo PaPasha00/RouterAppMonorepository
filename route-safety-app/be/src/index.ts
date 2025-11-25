@@ -15,11 +15,19 @@ console.log(`PORT: ${process.env.PORT || 'не задан'}`);
 function main(): void {
   const app = createApp();
   const PORT = Number(process.env.PORT) || 3001;
+  const HOST = process.env.HOST || '0.0.0.0';
+  const NODE_ENV = process.env.NODE_ENV || 'development';
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🚀 Бэкенд запущен на http://0.0.0.0:${PORT}`);
-    console.log(`📊 Health check: http://localhost:${PORT}/health`);
-    console.log(`🌐 Доступен по IP: http://<ваш-ip>:${PORT}`);
+  app.listen(PORT, HOST, () => {
+    console.log(`🚀 Бэкенд запущен на http://${HOST}:${PORT}`);
+    console.log(`📊 Health check: http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}/health`);
+    console.log(`🌍 Окружение: ${NODE_ENV}`);
+    if (HOST === '0.0.0.0') {
+      console.log(`🌐 Доступен по IP: http://<ваш-ip>:${PORT}`);
+    }
+    if (process.env.CORS_ORIGIN) {
+      console.log(`🔒 CORS origins: ${process.env.CORS_ORIGIN}`);
+    }
   });
 }
 

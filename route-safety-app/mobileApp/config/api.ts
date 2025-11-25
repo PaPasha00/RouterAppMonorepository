@@ -7,24 +7,41 @@ import Constants from "expo-constants";
 // 2) Derive IP from Expo debugger host in dev
 // 3) Sensible platform defaults
 function resolveBaseUrl(): string {
+  // 1. Проверяем конфигурацию из app.config.js
   const cfgUrl = (Constants as any)?.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL || (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL;
-  if (cfgUrl) return String(cfgUrl).trim().replace(/\/$/, "");
+  if (cfgUrl && cfgUrl !== "http://localhost:3001") {
+    return String(cfgUrl).trim().replace(/\/$/, "");
+  }
 
+  // 2. Проверяем переменную окружения
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
-  if (envUrl) return envUrl.replace(/\/$/, "");
+  if (envUrl && envUrl !== "http://localhost:3001") {
+    return envUrl.replace(/\/$/, "");
+  }
 
-  // Try derive from debuggerHost (e.g., 192.168.1.10:19000)
+  // 3. Пытаемся получить IP из debuggerHost (Expo автоматически определяет IP)
   const dbgHost = (Constants as any)?.expoConfig?.hostUri || (Constants as any)?.expoConfig?.debuggerHost || (Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost || (Constants as any)?.manifest?.debuggerHost;
   if (dbgHost && typeof dbgHost === "string" && dbgHost.includes(":")) {
     const host = dbgHost.split(":")[0];
-    return `http://${host}:3001`;
+    // Проверяем, что это не localhost
+    if (host !== "localhost" && host !== "127.0.0.1") {
+      return `http://${host}:3001`;
+    }
   }
 
-  // Fallbacks
+  // 4. Fallbacks для разных платформ
   if (Platform.OS === "android") {
     // Android emulator special host to reach host machine
     return "http://10.0.2.2:3001";
   }
+  
+  // 5. Для iOS симулятора localhost работает
+  if (Platform.OS === "ios" && __DEV__) {
+    return "http://localhost:3001";
+  }
+  
+  // 6. Для реального устройства нужно использовать IP
+  console.warn("[API] Используется localhost, что может не работать на реальном устройстве. Установите EXPO_PUBLIC_API_BASE_URL в .env");
   return "http://localhost:3001";
 }
 

@@ -48,7 +48,7 @@
       ]
     ],
     "extra": {
-      "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3001",
+      "EXPO_PUBLIC_API_BASE_URL": process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:3001",
       "eas": {
         "projectId": "183e51d5-d099-4e16-b8cb-a9806979afd5"
       }
