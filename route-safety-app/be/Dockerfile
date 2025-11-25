@@ -5,9 +5,8 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Копируем package.json и package-lock.json (если есть)
-# Используем относительный путь для надежности
-COPY ./package.json ./
-COPY ./package-lock.json* ./
+COPY package.json ./
+COPY package-lock.json* ./
 
 # Устанавливаем все зависимости (включая devDependencies для сборки)
 # Используем npm install вместо npm ci для большей совместимости
