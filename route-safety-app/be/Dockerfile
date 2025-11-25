@@ -4,11 +4,13 @@ FROM node:20-alpine
 # Устанавливаем рабочую директорию
 WORKDIR /app
 
-# Копируем package.json и package-lock.json
-COPY package.json package-lock.json ./
+# Копируем package.json и package-lock.json (если есть)
+COPY package.json ./
+COPY package-lock.json* ./
 
 # Устанавливаем все зависимости (включая devDependencies для сборки)
-RUN npm ci
+# Используем npm install вместо npm ci для большей совместимости
+RUN npm install
 
 # Копируем исходный код
 COPY . .
