@@ -31,19 +31,18 @@
 
 **Что нужно сделать:**
 
-1. **⚠️ КРИТИЧЕСКИ ВАЖНО: Установите Root Directory в `be`:**
+1. **⚠️ КРИТИЧЕСКИ ВАЖНО: Установите Root Directory:**
 
    - Откройте сервис в Railway
-   - Перейдите в **Settings** → **Build & Deploy**
-   - Найдите поле **"Root Directory"** или **"Source Root"**
-   - **Установите значение: `be`** (без слешей, без точек, просто `be`)
-   - Это единственная настройка, которую нужно указать вручную
-   - **Без этого Railway не найдет Dockerfile и package.json!**
-
-   **Если Root Directory не установлен в `be`, вы получите ошибку:**
-
-   - `"/package.json": not found`
+   - Перейдите в **Settings** → **Source**
+   - Найдите поле **"Add Root Directory"** или **"Root Directory"**
+   - **Установите значение: `route-safety-app`** (без слешей, без точек)
+   - Это говорит Railway, что проект находится в подпапке `route-safety-app/`
+   - **Без этого Railway не найдет Dockerfile!**
+   
+   **Если Root Directory не установлен, вы получите ошибку:**
    - `"Dockerfile does not exist"`
+   - Railway будет искать Dockerfile в корне монорепозитория, а не в `route-safety-app/`
 
 2. **Railway автоматически использует конфигурацию:**
 
