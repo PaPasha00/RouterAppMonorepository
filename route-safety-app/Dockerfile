@@ -1,6 +1,6 @@
-# Dockerfile в корне репозитория для Railway
-# Этот файл работает, если Root Directory НЕ установлен в be/
-# Использует be/ как рабочую директорию
+# Dockerfile для Railway
+# Работает когда Root Directory установлен в route-safety-app
+# Build context: route-safety-app/
 
 FROM node:20-alpine
 
@@ -8,6 +8,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Копируем package.json и package-lock.json из be/
+# Относительно build context (route-safety-app/)
 COPY be/package.json ./
 COPY be/package-lock.json* ./
 
