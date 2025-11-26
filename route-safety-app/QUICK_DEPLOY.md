@@ -39,8 +39,9 @@
    - **Установите значение: `route-safety-app`** (без слешей, без точек)
    - Это говорит Railway, что проект находится в подпапке `route-safety-app/`
    - **Без этого Railway не найдет Dockerfile!**
-   
+
    **Если Root Directory не установлен, вы получите ошибку:**
+
    - `"Dockerfile does not exist"`
    - Railway будет искать Dockerfile в корне монорепозитория, а не в `route-safety-app/`
 
