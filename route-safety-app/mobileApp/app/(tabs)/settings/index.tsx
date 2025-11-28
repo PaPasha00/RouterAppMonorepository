@@ -68,8 +68,7 @@ export default function SettingsScreen() {
     try {
       await saveSettings(newSettings);
       setSettings(newSettings);
-      // Кэш уже обновлен в saveSettings, но на всякий случай сбрасываем
-      clearSettingsCache();
+      // Кэш уже обновлен в saveSettings
       console.log("[SETTINGS] Настройки сохранены:", newSettings);
       Alert.alert("Успешно", "Настройки сохранены");
       // Возвращаемся на главный экран, чтобы изменения применились

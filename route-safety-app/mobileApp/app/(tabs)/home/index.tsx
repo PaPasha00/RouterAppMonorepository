@@ -54,6 +54,7 @@ import {
 import { clearAnalysisResult } from "../../../store/analysisStore";
 import {
   getSettings,
+  loadSettings,
   saveSettings,
   clearSettingsCache,
 } from "../../../store/settingsStore";
@@ -1052,12 +1053,11 @@ export default function HomeScreen() {
       setLoadingProgress(70);
 
       // Загружаем настройки для передачи на бэкенд
-      const { getSettings, clearSettingsCache } = await import(
+      const { loadSettings } = await import(
         "../../../store/settingsStore"
       );
-      // Сбрасываем кэш, чтобы получить актуальные настройки
-      clearSettingsCache();
-      const settings = getSettings();
+      // Загружаем актуальные настройки из хранилища
+      const settings = await loadSettings();
       console.log("[Home ANALYZE] Используемые настройки:", settings);
 
       const body = {
@@ -1369,12 +1369,32 @@ export default function HomeScreen() {
   // Загружаем настройку показа названий точек при фокусе экрана
   useFocusEffect(
     useCallback(() => {
+      const loadWaypointNamesSetting = async () => {
+        try {
+          const settings = await loadSettings();
+          const showNames = (settings as any).showWaypointNames ?? false;
+          console.log(
+            "[WAYPOINT NAMES] Загрузка настройки при фокусе:",
+            showNames,
+            "settings:",
+            settings
+          );
+          setShowWaypointNames(showNames);
+        } catch (e) {
+          console.error("[WAYPOINT NAMES] Ошибка загрузки настройки:", e);
+        }
+      };
+      loadWaypointNamesSetting();
+    }, [])
+  );
+  // И при первом монтировании
+  useEffect(() => {
+    const loadWaypointNamesSetting = async () => {
       try {
-        clearSettingsCache();
-        const settings = getSettings();
+        const settings = await loadSettings();
         const showNames = (settings as any).showWaypointNames ?? false;
         console.log(
-          "[WAYPOINT NAMES] Загрузка настройки при фокусе:",
+          "[WAYPOINT NAMES] Загрузка настройки при монтировании:",
           showNames,
           "settings:",
           settings
@@ -1383,24 +1403,8 @@ export default function HomeScreen() {
       } catch (e) {
         console.error("[WAYPOINT NAMES] Ошибка загрузки настройки:", e);
       }
-    }, [])
-  );
-  // И при первом монтировании
-  useEffect(() => {
-    try {
-      clearSettingsCache();
-      const settings = getSettings();
-      const showNames = (settings as any).showWaypointNames ?? false;
-      console.log(
-        "[WAYPOINT NAMES] Загрузка настройки при монтировании:",
-        showNames,
-        "settings:",
-        settings
-      );
-      setShowWaypointNames(showNames);
-    } catch (e) {
-      console.error("[WAYPOINT NAMES] Ошибка загрузки настройки:", e);
-    }
+    };
+    loadWaypointNamesSetting();
   }, []);
 
   return (
