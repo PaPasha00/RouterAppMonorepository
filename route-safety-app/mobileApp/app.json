@@ -20,7 +20,24 @@
       "bundleIdentifier": "com.routesafety.app",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Это приложение использует местоположение для отображения карты и поиска мест.",
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true,
+          "NSExceptionDomains": {
+            "46.188.41.57": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": false
+            },
+            "localhost": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": false
+            },
+            "172.20.10.3": {
+              "NSExceptionAllowsInsecureHTTPLoads": true,
+              "NSIncludesSubdomains": false
+            }
+          }
+        }
       }
     },
     "android": {
@@ -34,7 +51,8 @@
         "ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
-      ]
+      ],
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,7 +66,7 @@
       ]
     ],
     "extra": {
-      "EXPO_PUBLIC_API_BASE_URL": "http://localhost:3001",
+      "EXPO_PUBLIC_API_BASE_URL": null,
       "eas": {
         "projectId": "183e51d5-d099-4e16-b8cb-a9806979afd5"
       }

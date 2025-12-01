@@ -15,7 +15,9 @@ export const getElevationData = async (coordinates: LatLng[]): Promise<number[]>
   }
 
   try {
-    console.log(`Requesting elevation data for ${limitedCoords.length} coordinates`);
+    console.log(`[ELEVATION] Requesting elevation data for ${limitedCoords.length} coordinates`);
+    console.log(`[ELEVATION] API Base URL:`, API_CONFIG.BASE_URL);
+    console.log(`[ELEVATION] Endpoint:`, API_CONFIG.ENDPOINTS.ELEVATION);
 
     // Трансформируем в формат [lat, lng] для бэкенда
     const payloadCoords = limitedCoords.map((p) => [p.latitude, p.longitude]);

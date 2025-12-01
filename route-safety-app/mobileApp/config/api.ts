@@ -1,52 +1,73 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
-// Priority:
-// 0) app.json expo.extra.EXPO_PUBLIC_API_BASE_URL
-// 1) EXPO_PUBLIC_API_BASE_URL env (best for production and tunnels)
-// 2) Derive IP from Expo debugger host in dev
-// 3) Sensible platform defaults
+// Production сервер
+const PRODUCTION_URL = "http://46.188.41.57:3011";
+// Localhost для разработки
+const LOCALHOST_URL = "http://localhost:3001";
+// Android эмулятор
+const ANDROID_EMULATOR_URL = "http://10.0.2.2:3001";
+
+/**
+ * Определяет базовый URL API в зависимости от окружения
+ * 
+ * Приоритет:
+ * 1. Явная настройка через переменную окружения или app.config.js
+ * 2. По умолчанию: localhost:3001 для локальной разработки
+ */
 function resolveBaseUrl(): string {
-  // 1. Проверяем конфигурацию из app.config.js
-  const cfgUrl = (Constants as any)?.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL || (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL;
-  if (cfgUrl && cfgUrl !== "http://localhost:3001") {
-    return String(cfgUrl).trim().replace(/\/$/, "");
+  // 1. Проверяем явную настройку из app.config.js (высший приоритет)
+  const cfgUrl = (Constants as any)?.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL || 
+                 (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL;
+  if (cfgUrl && cfgUrl !== null && cfgUrl !== undefined && cfgUrl !== "null" && cfgUrl !== "undefined") {
+    const url = String(cfgUrl).trim().replace(/\/$/, "");
+    if (url) {
+      console.log('[API CONFIG] Используется URL из app.config.js:', url);
+      return url;
+    }
   }
 
   // 2. Проверяем переменную окружения
   const envUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
-  if (envUrl && envUrl !== "http://localhost:3001") {
-    return envUrl.replace(/\/$/, "");
-  }
-
-  // 3. Пытаемся получить IP из debuggerHost (Expo автоматически определяет IP)
-  const dbgHost = (Constants as any)?.expoConfig?.hostUri || (Constants as any)?.expoConfig?.debuggerHost || (Constants as any)?.manifest2?.extra?.expoGo?.debuggerHost || (Constants as any)?.manifest?.debuggerHost;
-  if (dbgHost && typeof dbgHost === "string" && dbgHost.includes(":")) {
-    const host = dbgHost.split(":")[0];
-    // Проверяем, что это не localhost
-    if (host !== "localhost" && host !== "127.0.0.1") {
-      return `http://${host}:3001`;
+  if (envUrl && envUrl !== "null" && envUrl !== "undefined") {
+    const url = envUrl.replace(/\/$/, "");
+    if (url) {
+      console.log('[API CONFIG] Используется URL из переменной окружения:', url);
+      return url;
     }
   }
 
-  // 4. Fallbacks для разных платформ
+  // 3. По умолчанию используем localhost:3001 для локальной разработки
   if (Platform.OS === "android") {
-    // Android emulator special host to reach host machine
-    return "http://10.0.2.2:3001";
+    // Android эмулятор использует специальный адрес для доступа к localhost хоста
+    const dbgHost = (Constants as any)?.expoConfig?.hostUri || 
+                    (Constants as any)?.expoConfig?.debuggerHost;
+    if (dbgHost && (dbgHost.includes("localhost") || dbgHost.includes("127.0.0.1"))) {
+      console.log('[API CONFIG] Android эмулятор, используем 10.0.2.2:', ANDROID_EMULATOR_URL);
+      return ANDROID_EMULATOR_URL;
+    }
   }
   
-  // 5. Для iOS симулятора localhost работает
-  if (Platform.OS === "ios" && __DEV__) {
-    return "http://localhost:3001";
+  // Для всех остальных случаев (веб, iOS симулятор, реальные устройства) используем localhost:3001
+  console.log('[API CONFIG] Используем localhost по умолчанию:', LOCALHOST_URL);
+  return LOCALHOST_URL;
+}
+
+// Кэшируем URL, чтобы не вычислять его каждый раз
+let cachedBaseUrl: string | null = null;
+
+function getBaseUrl(): string {
+  if (cachedBaseUrl === null) {
+    cachedBaseUrl = resolveBaseUrl();
+    console.log('[API CONFIG] Определен базовый URL:', cachedBaseUrl);
   }
-  
-  // 6. Для реального устройства нужно использовать IP
-  console.warn("[API] Используется localhost, что может не работать на реальном устройстве. Установите EXPO_PUBLIC_API_BASE_URL в .env");
-  return "http://localhost:3001";
+  return cachedBaseUrl;
 }
 
 export const API_CONFIG = {
-  BASE_URL: resolveBaseUrl(),
+  get BASE_URL() {
+    return getBaseUrl();
+  },
   ENDPOINTS: {
     ANALYZE_ROUTE: "/api/analyze-route",
     ELEVATION: "/api/elevation",
@@ -87,15 +108,50 @@ export async function apiPost<T>(endpoint: string, body: unknown, init?: Request
     }
   }
 
-  const res = await fetch(getApiUrl(endpoint), {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body ?? {}),
-    ...init,
+  const url = getApiUrl(endpoint);
+  console.log('[API] Отправка запроса:', {
+    method: 'POST',
+    url,
+    endpoint,
+    baseUrl: API_CONFIG.BASE_URL,
+    platform: Platform.OS,
   });
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`API ${endpoint} failed: ${res.status} ${text}`);
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body ?? {}),
+      ...init,
+    });
+    
+    console.log('[API] Ответ получен:', {
+      status: res.status,
+      statusText: res.statusText,
+      ok: res.ok,
+      url,
+    });
+    
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error('[API] Ошибка ответа:', {
+        status: res.status,
+        statusText: res.statusText,
+        text: text.substring(0, 200),
+        url,
+      });
+      throw new Error(`API ${endpoint} failed: ${res.status} ${text.substring(0, 100)}`);
+    }
+    return (await res.json()) as T;
+  } catch (error: any) {
+    console.error('[API] Ошибка запроса:', {
+      error: error?.message,
+      url,
+      endpoint,
+      baseUrl: API_CONFIG.BASE_URL,
+      platform: Platform.OS,
+      stack: error?.stack?.substring(0, 200),
+    });
+    throw error;
   }
-  return (await res.json()) as T;
 }

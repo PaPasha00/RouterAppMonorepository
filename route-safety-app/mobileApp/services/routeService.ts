@@ -83,19 +83,43 @@ export async function saveRoute(data: CreateRouteData): Promise<SavedRoute> {
  * Получает все маршруты пользователя
  */
 export async function getRoutes(): Promise<SavedRoute[]> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(getApiUrl('/api/routes'), {
-    method: 'GET',
-    headers,
-  });
+  try {
+    const headers = await getAuthHeaders();
+    const url = getApiUrl('/api/routes');
+    console.log('[RouteService] Загрузка маршрутов:', { url });
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers,
+    });
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Ошибка получения маршрутов' }));
-    throw new Error(error.error || 'Ошибка получения маршрутов');
+    console.log('[RouteService] Ответ получен:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      url,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: 'Ошибка получения маршрутов' }));
+      console.error('[RouteService] Ошибка ответа:', {
+        status: response.status,
+        error,
+        url,
+      });
+      throw new Error(error.error || 'Ошибка получения маршрутов');
+    }
+
+    const result = await response.json();
+    console.log('[RouteService] Маршруты загружены:', { count: result.routes?.length || 0 });
+    return result.routes;
+  } catch (error: any) {
+    console.error('[RouteService] Ошибка загрузки маршрутов:', {
+      error: error?.message,
+      stack: error?.stack?.substring(0, 200),
+    });
+    throw error;
   }
-
-  const result = await response.json();
-  return result.routes;
 }
 
 /**

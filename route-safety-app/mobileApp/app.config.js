@@ -23,7 +23,26 @@ module.exports = {
       bundleIdentifier: "com.routesafety.app",
       infoPlist: {
         NSLocationWhenInUseUsageDescription: "Это приложение использует местоположение для отображения карты и поиска мест.",
-        ITSAppUsesNonExemptEncryption: false
+        ITSAppUsesNonExemptEncryption: false,
+        // Разрешаем HTTP запросы для нашего API сервера
+        NSAppTransportSecurity: {
+          NSExceptionDomains: {
+            "46.188.41.57": {
+              NSExceptionAllowsInsecureHTTPLoads: true,
+              NSIncludesSubdomains: false
+            },
+            "localhost": {
+              NSExceptionAllowsInsecureHTTPLoads: true,
+              NSIncludesSubdomains: false
+            },
+            "172.20.10.3": {
+              NSExceptionAllowsInsecureHTTPLoads: true,
+              NSIncludesSubdomains: false
+            }
+          },
+          // ВРЕМЕННО: разрешаем все HTTP для разработки (будет исправлено в production build)
+          NSAllowsArbitraryLoads: true
+        }
       }
     },
     android: {
@@ -37,7 +56,9 @@ module.exports = {
         "ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION"
-      ]
+      ],
+      // Разрешаем HTTP запросы для Android
+      usesCleartextTraffic: true
     },
     web: {
       favicon: "./assets/favicon.png"
@@ -51,10 +72,11 @@ module.exports = {
       ]
     ],
     extra: {
-      // Используем переменную окружения или значение по умолчанию
-      // Для реального устройства используйте IP адрес вашего компьютера
-      // Узнайте IP: ifconfig | grep "inet " | grep -v 127.0.0.1
-      EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || "http://172.20.10.3:3001",
+      // Автоматическое определение URL:
+      // - Если установлена переменная окружения EXPO_PUBLIC_API_BASE_URL - используется она
+      // - Иначе автоматически определяется: localhost для веба/симулятора, production для реального устройства
+      // Можно переопределить через .env файл: EXPO_PUBLIC_API_BASE_URL=http://your-server:port
+      EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || undefined,
       eas: {
         projectId: "183e51d5-d099-4e16-b8cb-a9806979afd5"
       }
