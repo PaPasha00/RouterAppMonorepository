@@ -63,7 +63,7 @@
           <key>NSIncludesSubdomains</key>
           <false/>
         </dict>
-        <key>172.20.10.3</key>
+        <key>172.20.10.2</key>
         <dict>
           <key>NSExceptionAllowsInsecureHTTPLoads</key>
           <true/>

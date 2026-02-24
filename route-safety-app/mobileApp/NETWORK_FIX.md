@@ -30,13 +30,13 @@ ipconfig getifaddr en0
 
 Создайте или обновите `mobileApp/.env`:
 ```env
-EXPO_PUBLIC_API_BASE_URL=http://172.20.10.3:3001
+EXPO_PUBLIC_API_BASE_URL=http://172.20.10.2:3001
 ```
-(Замените `172.20.10.3` на ваш IP адрес)
+(Замените `172.20.10.2` на ваш IP адрес)
 
 **Вариант B: Через app.config.js**
 
-В `mobileApp/app.config.js` уже установлен IP `172.20.10.3`. Если ваш IP другой, обновите:
+В `mobileApp/app.config.js` уже установлен IP `172.20.10.2`. Если ваш IP другой, обновите:
 ```javascript
 EXPO_PUBLIC_API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL || "http://ВАШ-IP:3001",
 ```
@@ -55,7 +55,7 @@ npx expo start --clear
 
 В консоли приложения должно быть видно правильный URL:
 ```
-API_CONFIG.BASE_URL: http://172.20.10.3:3001
+API_CONFIG.BASE_URL: http://172.20.10.2:3001
 ```
 
 ### 6. Убедитесь, что устройства в одной сети

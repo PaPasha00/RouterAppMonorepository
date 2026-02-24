@@ -218,7 +218,8 @@ export function generateAnalysisPrompt(
   geographicContext: GeographicContext,
   formattedGeoContext: string,
   routeAnalysis: RouteGeometryAnalysis,
-  dailyRoutes?: DailyRoute[]
+  dailyRoutes?: DailyRoute[],
+  webSearchInfo?: string
 ): string {
   const startDate = new Date(request.startDate);
   const endDate = new Date(request.endDate);
@@ -414,6 +415,8 @@ ${JSON.stringify(exampleResponse, null, 2)}
 - Извилистость: ${routeAnalysis.sinuosity.toFixed(2)}
 - Высоты: мин ${routeAnalysis.minElevation}м, макс ${routeAnalysis.maxElevation}м, перепад ${routeAnalysis.maxElevation - routeAnalysis.minElevation}м
 ${request.tourismType?.toLowerCase().includes('водный') ? `- Координаты маршрута (для определения реки): начало [${request.coordinates[0]?.[0]}, ${request.coordinates[0]?.[1]}], конец [${request.coordinates[request.coordinates.length - 1]?.[0]}, ${request.coordinates[request.coordinates.length - 1]?.[1]}]` : ''}${weatherInfo}${recommendationsNote}
+
+${webSearchInfo ? `\n\n${webSearchInfo}\n\nВАЖНО: Используй информацию из интернета выше для более точных рекомендаций. Эта информация была найдена специально для данного маршрута и содержит актуальные данные о местности, реке (если водный маршрут), дорогах (если автомобильный), тропах и особенностях маршрута. Учитывай эту информацию при оценке сложности и формировании рекомендаций.` : ''}
 
 ${difficultyCriteria}
 

@@ -7,6 +7,13 @@ dotenv.config();
 // Проверяем загрузку переменных
 console.log('🔑 Проверка переменных окружения:');
 console.log(`OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'настроен' : 'НЕ НАЙДЕН'}`);
+const tavilyKey = process.env.TAVILY_API_KEY;
+if (tavilyKey) {
+  console.log(`TAVILY_API_KEY: настроен (${tavilyKey.substring(0, 15)}...)`);
+} else {
+  console.log(`TAVILY_API_KEY: НЕ НАЙДЕН (web search будет недоступен)`);
+  console.log(`   Убедитесь, что ключ добавлен в be/.env и сервер перезапущен`);
+}
 console.log(`PORT: ${process.env.PORT || 'не задан'}`);
 
 /**

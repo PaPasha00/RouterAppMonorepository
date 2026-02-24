@@ -35,7 +35,7 @@ module.exports = {
               NSExceptionAllowsInsecureHTTPLoads: true,
               NSIncludesSubdomains: false
             },
-            "172.20.10.3": {
+            "172.20.10.2": {
               NSExceptionAllowsInsecureHTTPLoads: true,
               NSIncludesSubdomains: false
             }

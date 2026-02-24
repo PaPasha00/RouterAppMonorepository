@@ -40,7 +40,7 @@ npx expo start --dev-client
 
    - `NSAllowsArbitraryLoads: true` для iOS
    - `usesCleartextTraffic: true` для Android
-   - Исключения для `46.188.41.57`, `localhost`, `172.20.10.3`
+   - Исключения для `46.188.41.57`, `localhost`, `172.20.10.2`
    - Production URL: `http://46.188.41.57:3011`
 
 2. **Info.plist**:

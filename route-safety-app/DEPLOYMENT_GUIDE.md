@@ -178,7 +178,7 @@ cp .env.example .env
 
 ```env
 # Для локальной разработки (замените на IP вашего компьютера)
-EXPO_PUBLIC_API_BASE_URL=http://192.168.1.100:3001
+EXPO_PUBLIC_API_BASE_URL=http://172.20.10.2:3001
 ```
 
 3. **Или обновите `app.json`:**
@@ -187,7 +187,7 @@ EXPO_PUBLIC_API_BASE_URL=http://192.168.1.100:3001
 {
   "expo": {
     "extra": {
-      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.100:3001"
+      "EXPO_PUBLIC_API_BASE_URL": "http://172.20.10.2:3001"
     }
   }
 }

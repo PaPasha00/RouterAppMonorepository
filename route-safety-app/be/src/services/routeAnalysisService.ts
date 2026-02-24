@@ -3,6 +3,7 @@ import { analyzeRouteGeometry } from '../helpers/routeAnalysis';
 import { generateAnalysisPrompt, analyzeRouteWithAI } from '../helpers/aiAnalysis';
 import { ElevationService } from './elevationService';
 import { WeatherService } from './weatherService';
+import { WebSearchService } from './webSearchService';
 import { RouteAnalysisRequest, RouteAnalysisResponse, DailyRoute } from '../types';
 
 /**
@@ -11,6 +12,7 @@ import { RouteAnalysisRequest, RouteAnalysisResponse, DailyRoute } from '../type
 export class RouteAnalysisService {
   private elevationService = new ElevationService();
   private weatherService = new WeatherService();
+  private webSearchService = new WebSearchService();
 
   /**
    * Выполняет полный анализ маршрута без любых заглушек/рандомизации
@@ -112,6 +114,20 @@ export class RouteAnalysisService {
 
       console.log(`✅ Получена информация по ${dailyRoutes.length} дням`);
 
+      // Поиск информации в интернете о маршруте
+      console.log('🔍 Поиск информации о маршруте в интернете...');
+      const webSearchInfo = await this.webSearchService.searchRouteInformation(
+        request.coordinates,
+        geographicContext,
+        request.tourismType || 'пеший'
+      );
+      
+      if (webSearchInfo) {
+        console.log('✅ Найдена информация из интернета (длина:', webSearchInfo.length, 'символов)');
+      } else {
+        console.log('ℹ️ Информация из интернета не найдена или web search недоступен');
+      }
+
       // Генерация промпта и запрос к ИИ (JSON-ответ)
       console.log(`⚙️ Настройки из запроса: usePointsSystem=${request.usePointsSystem}, pointsPerDay=${request.pointsPerDay}, includeAIRecommendations=${request.includeAIRecommendations}`);
       const prompt = generateAnalysisPrompt(
@@ -120,7 +136,8 @@ export class RouteAnalysisService {
         geographicContext,
         formattedGeoContext,
         routeAnalysis,
-        dailyRoutes
+        dailyRoutes,
+        webSearchInfo
       );
       console.log('🤖 Отправка запроса к ИИ...');
       const ai = await analyzeRouteWithAI(prompt);

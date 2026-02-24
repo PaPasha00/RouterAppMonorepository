@@ -1,6 +1,12 @@
 import { Platform } from "react-native";
 import Constants from "expo-constants";
 
+// Принудительно сбрасываем кэш при изменении окружения
+if (__DEV__) {
+  // В режиме разработки не кэшируем, чтобы можно было менять URL
+  (global as any).__API_URL_CACHE__ = null;
+}
+
 // Production сервер
 const PRODUCTION_URL = "http://46.188.41.57:3011";
 // Localhost для разработки
@@ -37,29 +43,43 @@ function resolveBaseUrl(): string {
     }
   }
 
-  // 3. По умолчанию используем localhost:3001 для локальной разработки
-  if (Platform.OS === "android") {
-    // Android эмулятор использует специальный адрес для доступа к localhost хоста
-    const dbgHost = (Constants as any)?.expoConfig?.hostUri || 
-                    (Constants as any)?.expoConfig?.debuggerHost;
-    if (dbgHost && (dbgHost.includes("localhost") || dbgHost.includes("127.0.0.1"))) {
-      console.log('[API CONFIG] Android эмулятор, используем 10.0.2.2:', ANDROID_EMULATOR_URL);
-      return ANDROID_EMULATOR_URL;
+  // 3. В режиме разработки ВСЕГДА используем localhost:3001
+  if (__DEV__) {
+    if (Platform.OS === "android") {
+      // Android эмулятор использует специальный адрес для доступа к localhost хоста
+      const dbgHost = (Constants as any)?.expoConfig?.hostUri || 
+                      (Constants as any)?.expoConfig?.debuggerHost;
+      if (dbgHost && (dbgHost.includes("localhost") || dbgHost.includes("127.0.0.1"))) {
+        console.log('[API CONFIG] Android эмулятор (DEV), используем 10.0.2.2:', ANDROID_EMULATOR_URL);
+        return ANDROID_EMULATOR_URL;
+      }
     }
+    
+    // В режиме разработки всегда localhost
+    console.log('[API CONFIG] Режим разработки (__DEV__), используем localhost:', LOCALHOST_URL);
+    return LOCALHOST_URL;
   }
   
-  // Для всех остальных случаев (веб, iOS симулятор, реальные устройства) используем localhost:3001
-  console.log('[API CONFIG] Используем localhost по умолчанию:', LOCALHOST_URL);
-  return LOCALHOST_URL;
+  // 4. В production используем production URL
+  console.log('[API CONFIG] Production режим, используем production URL:', PRODUCTION_URL);
+  return PRODUCTION_URL;
 }
 
 // Кэшируем URL, чтобы не вычислять его каждый раз
 let cachedBaseUrl: string | null = null;
 
 function getBaseUrl(): string {
+  // В режиме разработки всегда пересчитываем URL
+  if (__DEV__) {
+    cachedBaseUrl = null;
+  }
+  
   if (cachedBaseUrl === null) {
     cachedBaseUrl = resolveBaseUrl();
     console.log('[API CONFIG] Определен базовый URL:', cachedBaseUrl);
+    console.log('[API CONFIG] Platform:', Platform.OS);
+    const dbgHost = Constants.expoConfig?.debuggerHost || Constants.manifest?.debuggerHost;
+    console.log('[API CONFIG] DebuggerHost:', dbgHost || 'не определен');
   }
   return cachedBaseUrl;
 }
