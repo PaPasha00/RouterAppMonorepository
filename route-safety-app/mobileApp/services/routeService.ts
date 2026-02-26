@@ -30,6 +30,8 @@ export interface RouteAnalysis {
   startDate?: string;
   endDate?: string;
   tourismType?: string;
+  /** URL источников, использованных при веб-поиске (приходит с API анализа) */
+  sourceUrls?: string[];
   createdAt: string;
 }
 

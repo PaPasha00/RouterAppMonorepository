@@ -15,19 +15,27 @@ export class WeatherService {
   ): Promise<DailyWeather | null> {
     try {
       const [lat, lng] = coordinates;
-      const targetDate = new Date(date);
+      const targetDate = new Date(date + 'T12:00:00Z'); // полдень UTC, чтобы не съезжать на соседний день из-за времени
       const today = new Date();
-      const daysDiff = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      const todayStr = today.toISOString().split('T')[0];
+      let daysDiff = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-      // Open-Meteo предоставляет прогноз на 16 дней вперед
-      if (daysDiff < 0 || daysDiff > 16) {
-        console.log(`[WEATHER] Дата ${date} вне диапазона прогноза (0-16 дней)`);
+      // Если дата в прошлом — запрашиваем погоду на сегодня (как приближение для первого дня)
+      let dateToRequest = date;
+      if (daysDiff < 0) {
+        console.log(`[WEATHER] Дата ${date} в прошлом, используем прогноз на сегодня (${todayStr}) для приближённых данных`);
+        dateToRequest = todayStr;
+        daysDiff = 0;
+      }
+
+      // Open-Meteo предоставляет прогноз на 16 дней (индексы 0..15: сегодня + 15 следующих)
+      if (daysDiff > 15) {
+        console.log(`[WEATHER] Дата ${date} вне диапазона прогноза (доступно 0–15 дней от сегодня)`);
         return null;
       }
 
-      console.log(`[WEATHER] Запрос погоды для координат [${lat}, ${lng}] на дату ${date} (день ${daysDiff})`);
+      console.log(`[WEATHER] Запрос погоды для координат [${lat}, ${lng}] на дату ${dateToRequest} (день ${daysDiff})`);
 
-      // Open-Meteo API для прогноза погоды
       const url = `https://api.open-meteo.com/v1/forecast`;
       const params = new URLSearchParams({
         latitude: lat.toString(),
@@ -45,27 +53,27 @@ export class WeatherService {
         return null;
       }
 
-      // Находим индекс нужной даты
-      const targetDateStr = targetDate.toISOString().split('T')[0];
-      const dateIndex = data.daily.time.findIndex((d: string) => d === targetDateStr);
+      const targetDateStr = new Date(dateToRequest + 'T12:00:00Z').toISOString().split('T')[0];
+      let dateIndex = data.daily.time.findIndex((d: string) => d === targetDateStr);
 
+      // Если точной даты нет (часовой пояс API vs UTC) — берём ближайшую: сначала первый день прогноза
       if (dateIndex === -1) {
-        console.log(`[WEATHER] Дата ${targetDateStr} не найдена в прогнозе`);
-        return null;
+        dateIndex = 0;
+        console.log(`[WEATHER] Дата ${targetDateStr} не найдена в ответе, используем первый доступный день: ${data.daily.time[0]}`);
       }
 
       const weatherCode = data.daily.weathercode[dateIndex];
       const conditions = this.weatherCodeToCondition(weatherCode);
 
       const weather: DailyWeather = {
-        date: targetDateStr,
+        date: new Date(date + 'T12:00:00Z').toISOString().split('T')[0], // в ответе сохраняем запрошенную дату (день маршрута)
         temperature: {
           min: Math.round(data.daily.temperature_2m_min[dateIndex]),
           max: Math.round(data.daily.temperature_2m_max[dateIndex]),
         },
         conditions,
-        precipitation: Math.round(data.daily.precipitation_sum[dateIndex] * 10) / 10, // мм, округляем до 0.1
-        windSpeed: Math.round(data.daily.windspeed_10m_max[dateIndex] * 10) / 10, // м/с, округляем до 0.1
+        precipitation: Math.round(data.daily.precipitation_sum[dateIndex] * 10) / 10,
+        windSpeed: Math.round(data.daily.windspeed_10m_max[dateIndex] * 10) / 10,
         description: this.getWeatherDescription(weatherCode, data.daily.temperature_2m_max[dateIndex]),
       };
 

@@ -1,5 +1,40 @@
 import axios from 'axios';
 
+// Предпочтительные источники с туристскими отчётами и библиотеками маршрутов.
+// Эти домены будут дополнительно пробиваться в web search перед ответом ИИ.
+const PREFERRED_MOUNTAIN_SOURCES: string[] = [
+  'turclubmai.ru',
+  'tlib.ru',
+  'tourism.ru',
+  'lib.ru',
+  'mountain.ru',
+  'risk.ru',
+  'alpklubspb.ru',
+  'alpfederation.ru',
+  'tssr.ru',
+  'mountain.net.ua',
+  'fst-otm.net',
+  'climb.od.ua',
+  'russianclimb.com',
+  'vvv.ru',
+  'taganok.ru',
+];
+
+const PREFERRED_WATER_SOURCES: string[] = [
+  'veslo.ru',
+  'vvv.ru',
+  'taganok.ru',
+  'tourism.intat.ru',
+  'tourism.ru',
+  'tlib.ru',
+  'turclubmai.ru',
+];
+
+export interface WebSearchResult {
+  text: string;
+  sourceUrls: string[];
+}
+
 /**
  * Сервис для поиска информации в интернете о маршрутах, реках, местности
  */
@@ -27,11 +62,17 @@ export class WebSearchService {
   }
 
   /**
-   * Ищет информацию о реке по координатам маршрута
+   * Ищет информацию о реке по координатам маршрута.
+   * Если задано riverName (определено по координатам через OSM), поиск привязывается к этой реке.
    */
-  async searchRiverInfo(coordinates: number[][], geographicContext: any): Promise<string> {
+  async searchRiverInfo(
+    coordinates: number[][],
+    geographicContext: any,
+    riverName?: string | null
+  ): Promise<WebSearchResult> {
+    const empty: WebSearchResult = { text: '', sourceUrls: [] };
     if (!this.apiKey) {
-      return '';
+      return empty;
     }
 
     try {
@@ -39,14 +80,37 @@ export class WebSearchService {
       const centerLat = coordinates.reduce((sum, coord) => sum + coord[0], 0) / coordinates.length;
       const centerLng = coordinates.reduce((sum, coord) => sum + coord[1], 0) / coordinates.length;
 
-      // Формируем запросы для поиска информации о реке
-      const queries = [
-        `река ${geographicContext.localities?.[0] || ''} ${geographicContext.regions?.[0] || ''} координаты ${centerLat.toFixed(4)} ${centerLng.toFixed(4)}`,
-        `сплав по реке ${geographicContext.regions?.[0] || ''} пороги препятствия`,
-        `водный маршрут ${geographicContext.localities?.[0] || ''} ${geographicContext.regions?.[0] || ''} отчет`,
-      ];
+      const region = geographicContext.regions?.[0] || '';
+      const locality = geographicContext.localities?.[0] || '';
+
+      // Запросы: если известна река — ищем именно по ней; иначе по региону и координатам
+      let baseQueries: string[];
+      if (riverName && riverName.trim()) {
+        baseQueries = [
+          `река ${riverName.trim()} сплав отчет`,
+          `река ${riverName.trim()} ${region} пороги препятствия`,
+          `водный маршрут река ${riverName.trim()} ${region} описание`,
+          `река ${riverName.trim()} координаты ${centerLat.toFixed(4)} ${centerLng.toFixed(4)}`,
+        ];
+        console.log(`  🏞️ Поиск привязан к реке: "${riverName.trim()}"`);
+      } else {
+        baseQueries = [
+          `река ${locality} ${region} координаты ${centerLat.toFixed(4)} ${centerLng.toFixed(4)}`,
+          `сплав по реке ${region} пороги препятствия`,
+          `водный маршрут ${locality} ${region} отчет`,
+        ];
+      }
+
+      // Дополнительные запросы по предпочтительным сайтам (с названием реки или регионом)
+      const preferredQueries = PREFERRED_WATER_SOURCES.map(domain => {
+        const place = (riverName && riverName.trim()) ? `река ${riverName.trim()} ${region}` : `${locality} ${region}`;
+        return `отчеты о водных маршрутах ${place} сайт:${domain}`;
+      }).slice(0, 4); // чтобы не делать слишком много запросов
+
+      const queries = [...baseQueries, ...preferredQueries];
 
       const results: string[] = [];
+      const sourceUrls = new Set<string>();
 
       for (const query of queries) {
         try {
@@ -75,13 +139,14 @@ export class WebSearchService {
           }
 
           if (response.data?.results && Array.isArray(response.data.results)) {
-            const snippets = response.data.results
-              .slice(0, 2)
-              .map((r: any) => r.content || r.snippet)
-              .filter(Boolean);
-            if (snippets.length > 0) {
-              console.log(`  ✅ Найдено ${snippets.length} результатов`);
-              results.push(...snippets);
+            const items = response.data.results.slice(0, 2);
+            for (const r of items) {
+              if (r.url && typeof r.url === 'string') sourceUrls.add(r.url);
+              const snippet = r.content || r.snippet;
+              if (snippet) results.push(snippet);
+            }
+            if (items.length > 0) {
+              console.log(`  ✅ Найдено ${items.length} результатов`);
             }
           }
         } catch (error: any) {
@@ -91,16 +156,21 @@ export class WebSearchService {
       }
 
       if (results.length > 0) {
+        const urlsList = Array.from(sourceUrls);
         const combinedInfo = `ИНФОРМАЦИЯ ИЗ ИНТЕРНЕТА О РЕКЕ И МАРШРУТЕ:\n${results.join('\n\n')}\n`;
-        console.log(`  📊 Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников`);
-        return combinedInfo;
+        console.log(`  📊 Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников, URL: ${urlsList.length}`);
+        if (urlsList.length > 0) {
+          console.log('  🔗 Ссылки, по которым получена информация о реке/маршруте:');
+          urlsList.forEach((url, i) => console.log(`     ${i + 1}. ${url}`));
+        }
+        return { text: combinedInfo, sourceUrls: urlsList };
       } else {
         console.log(`  ℹ️ Информация не найдена для водного маршрута`);
-        return '';
+        return empty;
       }
     } catch (error: any) {
       console.error('❌ Ошибка web search для реки:', error.message);
-      return '';
+      return empty;
     }
   }
 
@@ -111,9 +181,10 @@ export class WebSearchService {
     coordinates: number[][],
     geographicContext: any,
     tourismType: string
-  ): Promise<string> {
+  ): Promise<WebSearchResult> {
+    const empty: WebSearchResult = { text: '', sourceUrls: [] };
     if (!this.apiKey) {
-      return '';
+      return empty;
     }
 
     try {
@@ -127,7 +198,8 @@ export class WebSearchService {
       const isCar = tourismType?.toLowerCase().includes('автомобильный');
       const isHiking = !isCar;
 
-      const queries = isCar
+      // Базовые запросы по типу маршрута
+      const baseQueries = isCar
         ? [
             `автомобильный маршрут ${locality} ${region} дороги состояние`,
             `дорога ${locality} ${region} проезжаемость условия`,
@@ -139,7 +211,18 @@ export class WebSearchService {
             `туристический маршрут ${locality} ${region} описание`,
           ];
 
+      // Для пеших/горных маршрутов дополнительно пробиваем специализированные библиотеки
+      const preferredDomains = isCar ? PREFERRED_MOUNTAIN_SOURCES : PREFERRED_MOUNTAIN_SOURCES;
+      const typeLabel = isCar ? 'автомобильных' : 'горных и пеших';
+
+      const preferredQueries = preferredDomains.map(domain => {
+        return `подробные отчеты о ${typeLabel} маршрутах ${locality} ${region} сайт:${domain}`;
+      }).slice(0, 5);
+
+      const queries = [...baseQueries, ...preferredQueries];
+
       const results: string[] = [];
+      const sourceUrls = new Set<string>();
 
       for (const query of queries) {
         try {
@@ -168,13 +251,14 @@ export class WebSearchService {
           }
 
           if (response.data?.results && Array.isArray(response.data.results)) {
-            const snippets = response.data.results
-              .slice(0, 2)
-              .map((r: any) => r.content || r.snippet)
-              .filter(Boolean);
-            if (snippets.length > 0) {
-              console.log(`  ✅ Найдено ${snippets.length} результатов`);
-              results.push(...snippets);
+            const items = response.data.results.slice(0, 2);
+            for (const r of items) {
+              if (r.url && typeof r.url === 'string') sourceUrls.add(r.url);
+              const snippet = r.content || r.snippet;
+              if (snippet) results.push(snippet);
+            }
+            if (items.length > 0) {
+              console.log(`  ✅ Найдено ${items.length} результатов`);
             }
           }
         } catch (error: any) {
@@ -183,36 +267,44 @@ export class WebSearchService {
       }
 
       if (results.length > 0) {
+        const urlsList = Array.from(sourceUrls);
         const combinedInfo = `ИНФОРМАЦИЯ ИЗ ИНТЕРНЕТА О МАРШРУТЕ:\n${results.join('\n\n')}\n`;
-        console.log(`  📊 Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников`);
-        return combinedInfo;
+        console.log(`  📊 Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников, URL: ${urlsList.length}`);
+        if (urlsList.length > 0) {
+          console.log('  🔗 Ссылки, по которым получена информация о маршруте:');
+          urlsList.forEach((url, i) => console.log(`     ${i + 1}. ${url}`));
+        }
+        return { text: combinedInfo, sourceUrls: urlsList };
       } else {
         console.log(`  ℹ️ Информация не найдена для маршрута`);
-        return '';
+        return empty;
       }
     } catch (error: any) {
       console.error('❌ Ошибка web search для маршрута:', error.message);
-      return '';
+      return empty;
     }
   }
 
   /**
-   * Универсальный метод поиска информации о маршруте
+   * Универсальный метод поиска информации о маршруте.
+   * Для водного маршрута можно передать riverName (определённый по координатам через OSM).
    */
   async searchRouteInformation(
     coordinates: number[][],
     geographicContext: any,
-    tourismType: string
-  ): Promise<string> {
+    tourismType: string,
+    riverName?: string | null
+  ): Promise<WebSearchResult> {
+    const empty: WebSearchResult = { text: '', sourceUrls: [] };
     if (!this.apiKey) {
       console.log('ℹ️ Web search пропущен: TAVILY_API_KEY не настроен');
-      return '';
+      return empty;
     }
 
     const isWater = tourismType?.toLowerCase().includes('водный');
 
     if (isWater) {
-      return await this.searchRiverInfo(coordinates, geographicContext);
+      return await this.searchRiverInfo(coordinates, geographicContext, riverName);
     } else {
       return await this.searchRouteInfo(coordinates, geographicContext, tourismType);
     }

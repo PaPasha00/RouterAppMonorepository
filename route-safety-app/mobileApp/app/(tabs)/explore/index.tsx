@@ -9,6 +9,7 @@ import {
   Platform,
   Modal,
   TextInput,
+  Linking,
 } from "react-native";
 import {
   getAnalysisResult,
@@ -419,6 +420,7 @@ export default function ExploreScreen() {
           formattedGeoContext: existing.formattedGeoContext || (existing.geographicContext ? JSON.stringify(existing.geographicContext) : "Неизвестно"),
           dailyRoutes: existing.dailyRoutes || [],
           totalDays: existing.totalDays || (existing.dailyRoutes?.length || 1),
+          sourceUrls: Array.isArray(existing.sourceUrls) ? existing.sourceUrls : undefined,
         };
 
         console.log("[Explore SAVE] Prepared analysis data:", {
@@ -995,6 +997,7 @@ export default function ExploreScreen() {
                         )}
                       </View>
                     )}
+
                 </>
               ) : (
                 // Фоллбэк: простой текст, если JSON не распарсился
@@ -1055,6 +1058,67 @@ export default function ExploreScreen() {
                   </Text>
                 </View>
               )}
+
+              {/* Источники: откуда бралась информация (sourcesUsed с полем usedFor) или просто список ссылок */}
+              {(Array.isArray(existing.analysisStructured?.sourcesUsed) &&
+                existing.analysisStructured.sourcesUsed.length > 0) ? (
+                  <View style={styles.card}>
+                    <Text style={styles.cardTitle}>🔗 Откуда бралась информация</Text>
+                    <Text style={[styles.cardText, { marginBottom: 10 }]}>
+                      В отчёте использованы данные из следующих источников:
+                    </Text>
+                    {existing.analysisStructured.sourcesUsed.map(
+                      (item: { url: string; usedFor: string }, i: number) => (
+                        <View
+                          key={i}
+                          style={[
+                            styles.sourceItemContainer,
+                            i === existing.analysisStructured!.sourcesUsed!.length - 1 &&
+                              styles.sourceItemContainerLast,
+                          ]}
+                        >
+                          <Text style={styles.sourceUsedForText}>{item.usedFor}</Text>
+                          <TouchableOpacity
+                            onPress={() => Linking.openURL(item.url)}
+                            style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}
+                          >
+                            <Ionicons name="open-outline" size={14} color="#007AFF" style={{ marginRight: 6 }} />
+                            <Text style={styles.sourceLinkText} numberOfLines={2}>
+                              {item.url}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      )
+                    )}
+                  </View>
+                ) : Array.isArray(existing.sourceUrls) && existing.sourceUrls.length > 0 ? (
+                  <View style={styles.card}>
+                    <Text style={styles.cardTitle}>🔗 Источники</Text>
+                    <Text style={[styles.cardText, { marginBottom: 10 }]}>
+                      Информация о маршруте могла быть взята из этих страниц:
+                    </Text>
+                    {existing.sourceUrls.map((url: string, i: number) => (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => Linking.openURL(url)}
+                        style={[
+                          styles.sourceLinkTouchable,
+                          i === existing.sourceUrls!.length - 1 && styles.sourceLinkTouchableLast,
+                        ]}
+                      >
+                        <Ionicons
+                          name="open-outline"
+                          size={14}
+                          color="#007AFF"
+                          style={{ marginRight: 6 }}
+                        />
+                        <Text style={styles.sourceLinkText} numberOfLines={2}>
+                          {url}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : null}
             </>
           )}
         </View>

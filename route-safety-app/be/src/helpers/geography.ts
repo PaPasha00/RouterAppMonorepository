@@ -164,6 +164,74 @@ export async function getGeographicContext(coordinates: LatLngTuple[]): Promise<
   }
 }
 
+const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
+
+/**
+ * Определяет название реки по координатам маршрута через Overpass API (OpenStreetMap).
+ * Запрашивает реки в радиусе 500 м от центра и от начальной/конечной точек маршрута.
+ */
+export async function getRiverNameFromCoordinates(coordinates: LatLngTuple[]): Promise<string | null> {
+  if (!coordinates || coordinates.length < 2) return null;
+
+  const pointsToCheck: LatLngTuple[] = [];
+  const centerLat = coordinates.reduce((s, c) => s + c[0], 0) / coordinates.length;
+  const centerLng = coordinates.reduce((s, c) => s + c[1], 0) / coordinates.length;
+  pointsToCheck.push([centerLat, centerLng]);
+  pointsToCheck.push(coordinates[0]);
+  pointsToCheck.push(coordinates[coordinates.length - 1]);
+
+  const seenNames = new Set<string>();
+
+  for (const [lat, lon] of pointsToCheck) {
+    try {
+      // Небольшая bbox вокруг точки (~1 км), чтобы найти реку по координатам
+      const delta = 0.009; // ~1 км
+      const south = lat - delta;
+      const north = lat + delta;
+      const west = lon - delta;
+      const east = lon + delta;
+      const query = `[out:json][timeout:10];
+( way["waterway"="river"](${south},${west},${north},${east});
+  way["waterway"="stream"](${south},${west},${north},${east});
+); out body;`;
+      const response = await axios.post(
+        OVERPASS_URL,
+        query,
+        {
+          headers: { 'Content-Type': 'text/plain' },
+          timeout: 8000,
+        }
+      );
+      const data = response.data;
+      if (!data?.elements?.length) continue;
+      // Сортируем: сначала river, потом stream; с именем в приоритете
+      const elements = (data.elements as Array<{ tags?: { waterway?: string; name?: string }; id: number }>)
+        .filter((el) => el.tags?.name)
+        .sort((a, b) => {
+          const aRiver = a.tags?.waterway === 'river' ? 1 : 0;
+          const bRiver = b.tags?.waterway === 'river' ? 1 : 0;
+          if (bRiver !== aRiver) return bRiver - aRiver;
+          return 0;
+        });
+      for (const el of elements) {
+        const name = (el.tags?.name || '').trim();
+        if (name) seenNames.add(name);
+      }
+    } catch (err) {
+      console.log('  ⚠️ Overpass (река по координатам):', (err as Error).message);
+    }
+  }
+
+  // Один и тот же гидроним по разным точкам — считаем основной рекой
+  const names = Array.from(seenNames);
+  if (names.length === 1) return names[0];
+  if (names.length > 1) {
+    // Несколько рек (например, при слиянии) — возвращаем первую (часто основная)
+    return names[0];
+  }
+  return null;
+}
+
 /**
  * Форматирует географический контекст в текстовый вид
  */

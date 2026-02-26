@@ -266,6 +266,36 @@ export const styles = StyleSheet.create({
     lineHeight: 20,
     color: "#e17055",
   },
+  sourceLinkTouchable: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingRight: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  sourceLinkTouchableLast: {
+    borderBottomWidth: 0,
+  },
+  sourceItemContainer: {
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#eee",
+  },
+  sourceItemContainerLast: {
+    borderBottomWidth: 0,
+  },
+  sourceUsedForText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#1a1a1a",
+  },
+  sourceLinkText: {
+    flex: 1,
+    fontSize: 13,
+    color: "#007AFF",
+    textDecorationLine: "underline",
+  },
   analyzePrimaryButton: {
     backgroundColor: "#007AFF",
     paddingVertical: 14,

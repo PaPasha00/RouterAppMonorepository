@@ -1,4 +1,4 @@
-import { AIAnalysisResponse, AIAnalysisSummary, AIAnalysisStats, AIAnalysisGeography, AIAnalysisDay, AIAnalysisDayWeather } from '../types';
+import { AIAnalysisResponse, AIAnalysisSummary, AIAnalysisStats, AIAnalysisGeography, AIAnalysisDay, AIAnalysisDayWeather, AIAnalysisSourceUsed } from '../types';
 
 /**
  * Валидирует и нормализует ответ от ИИ, приводя его к строгому типу AIAnalysisResponse
@@ -61,6 +61,7 @@ export function validateAndNormalizeAIResponse(rawResponse: any): AIAnalysisResp
     // Нормализуем recommendations и warnings
     const recommendations = normalizeStringArray(rawResponse.recommendations);
     const warnings = normalizeStringArray(rawResponse.warnings);
+    const sourcesUsed = normalizeSourcesUsed(rawResponse.sourcesUsed);
 
     const normalized: AIAnalysisResponse = {
       summary,
@@ -69,6 +70,7 @@ export function validateAndNormalizeAIResponse(rawResponse: any): AIAnalysisResp
       days,
       recommendations,
       warnings,
+      ...(sourcesUsed.length > 0 && { sourcesUsed }),
     };
 
     console.log('✅ [AI Validator] Ответ успешно нормализован:', {
@@ -78,6 +80,7 @@ export function validateAndNormalizeAIResponse(rawResponse: any): AIAnalysisResp
       daysCount: days.length,
       recommendationsCount: recommendations.length,
       warningsCount: warnings.length,
+      sourcesUsedCount: sourcesUsed.length,
     });
 
     return normalized;
@@ -129,6 +132,19 @@ function normalizeStringArray(value: any): string[] {
       .filter(item => item.length > 0);
   }
   return [];
+}
+
+/**
+ * Нормализует массив sourcesUsed: { url, usedFor }
+ */
+function normalizeSourcesUsed(value: any): AIAnalysisSourceUsed[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item: any) => item && typeof item === 'object' && typeof item.url === 'string' && item.url.trim().length > 0)
+    .map((item: any) => ({
+      url: String(item.url).trim(),
+      usedFor: typeof item.usedFor === 'string' ? item.usedFor.trim() : 'Информация о маршруте',
+    }));
 }
 
 /**

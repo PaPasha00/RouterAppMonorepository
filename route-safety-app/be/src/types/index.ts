@@ -96,6 +96,8 @@ export interface RouteAnalysisResponse {
   formattedGeoContext: string;
   dailyRoutes: DailyRoute[];
   totalDays: number;
+  /** URL источников, использованных при веб-поиске информации о маршруте */
+  sourceUrls?: string[];
 }
 
 export interface ApiError {
@@ -147,11 +149,19 @@ export interface AIAnalysisDay {
   recommendations: string[];
 }
 
+/** Один источник информации: ссылка + что именно взято из неё для отчёта */
+export interface AIAnalysisSourceUsed {
+  url: string;
+  usedFor: string; // Краткое описание: что взято из этого источника (например: "Описание порогов на реке", "Рекомендации по стоянкам")
+}
+
 export interface AIAnalysisResponse {
   summary: AIAnalysisSummary;
   stats: AIAnalysisStats;
   geography: AIAnalysisGeography;
-  days: AIAnalysisDay[]; // Массив дней, должен соответствовать количеству дней маршрута
-  recommendations: string[]; // Общие рекомендации
-  warnings: string[]; // Предупреждения и важная информация
+  days: AIAnalysisDay[];
+  recommendations: string[];
+  warnings: string[];
+  /** Источники: откуда взята информация (обязательно заполнять при использовании веб-поиска) */
+  sourcesUsed?: AIAnalysisSourceUsed[];
 }

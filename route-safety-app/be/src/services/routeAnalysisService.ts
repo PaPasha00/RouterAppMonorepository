@@ -1,4 +1,4 @@
-import { determineTerrainType, getGeographicContext, formatGeographicContext } from '../helpers/geography';
+import { determineTerrainType, getGeographicContext, formatGeographicContext, getRiverNameFromCoordinates } from '../helpers/geography';
 import { analyzeRouteGeometry } from '../helpers/routeAnalysis';
 import { generateAnalysisPrompt, analyzeRouteWithAI } from '../helpers/aiAnalysis';
 import { ElevationService } from './elevationService';
@@ -116,14 +116,35 @@ export class RouteAnalysisService {
 
       // Поиск информации в интернете о маршруте
       console.log('🔍 Поиск информации о маршруте в интернете...');
-      const webSearchInfo = await this.webSearchService.searchRouteInformation(
+      const isWater = (request.tourismType || '').toLowerCase().includes('водный');
+      let riverName: string | null = null;
+      if (isWater && request.coordinates?.length >= 2) {
+        try {
+          riverName = await getRiverNameFromCoordinates(request.coordinates);
+          if (riverName) {
+            console.log('  🏞️ По координатам определена река:', riverName);
+          } else {
+            console.log('  ℹ️ Не удалось определить реку по координатам (Overpass), поиск по региону');
+          }
+        } catch (e) {
+          console.log('  ⚠️ Ошибка определения реки по координатам:', (e as Error).message);
+        }
+      }
+      const webSearchResult = await this.webSearchService.searchRouteInformation(
         request.coordinates,
         geographicContext,
-        request.tourismType || 'пеший'
+        request.tourismType || 'пеший',
+        riverName ?? undefined
       );
-      
+      const webSearchInfo = webSearchResult.text;
+      const sourceUrls = webSearchResult.sourceUrls || [];
+
       if (webSearchInfo) {
-        console.log('✅ Найдена информация из интернета (длина:', webSearchInfo.length, 'символов)');
+        console.log('✅ Найдена информация из интернета (длина:', webSearchInfo.length, 'символов, источников:', sourceUrls.length, ')');
+        if (sourceUrls.length > 0) {
+          console.log('🔗 Ссылки, использованные для анализа маршрута:');
+          sourceUrls.forEach((url, i) => console.log(`   ${i + 1}. ${url}`));
+        }
       } else {
         console.log('ℹ️ Информация из интернета не найдена или web search недоступен');
       }
@@ -137,7 +158,9 @@ export class RouteAnalysisService {
         formattedGeoContext,
         routeAnalysis,
         dailyRoutes,
-        webSearchInfo
+        webSearchInfo,
+        sourceUrls,
+        riverName ?? undefined
       );
       console.log('🤖 Отправка запроса к ИИ...');
       const ai = await analyzeRouteWithAI(prompt);
@@ -180,6 +203,7 @@ export class RouteAnalysisService {
         formattedGeoContext,
         dailyRoutes,
         totalDays,
+        sourceUrls: sourceUrls.length > 0 ? sourceUrls : undefined,
       };
     } catch (error: any) {
       console.error('❌ Ошибка анализа маршрута (service):', error?.message || error);
