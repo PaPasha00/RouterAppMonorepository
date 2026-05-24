@@ -68,10 +68,8 @@ export default function SettingsScreen() {
     try {
       await saveSettings(newSettings);
       setSettings(newSettings);
-      // Кэш уже обновлен в saveSettings
       console.log("[SETTINGS] Настройки сохранены:", newSettings);
       Alert.alert("Успешно", "Настройки сохранены");
-      // Возвращаемся на главный экран, чтобы изменения применились
       router.back();
     } catch (error) {
       console.error("[SETTINGS] Ошибка сохранения:", error);

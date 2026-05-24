@@ -40,7 +40,6 @@ export class ElevationController {
       console.log(`Requesting elevation data for ${validCoords.length} coordinates`);
       const data = await elevationService.getElevationData({ coordinates: validCoords });
       
-      // Логируем результат для отладки
       if (data.results && data.results.length > 0) {
         const elevations = data.results.map(r => r.elevation);
         const minElev = Math.min(...elevations);

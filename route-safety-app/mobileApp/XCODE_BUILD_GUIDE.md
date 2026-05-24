@@ -1,289 +1,69 @@
-# Сборка через Xcode с бесплатным Apple ID
+# Сборка на iPhone через Xcode (бесплатный Apple ID)
 
-## Пошаговая инструкция
+`react-native-maps` — нужен dev build, не Expo Go.
 
-### Шаг 1: Откройте проект в Xcode
+## 1. Открыть проект
 
 ```bash
 cd mobileApp
 open ios/RouteSafetyApp.xcworkspace
 ```
 
-⚠️ **Важно**:
+Только `.xcworkspace`, не `.xcodeproj`. Открытие Xcode само по себе ничего на телефон не ставит.
 
-- Открывайте `.xcworkspace`, а не `.xcodeproj`!
-- **Просто открытие workspace НЕ устанавливает приложение!** Это только открывает проект в Xcode. После этого нужно выполнить шаги ниже и нажать кнопку **Run (▶️)** в Xcode.
+## 2. iPhone по USB
 
----
+Разблокировать, «Доверять этому компьютеру».
 
-### Шаг 2: Подключите iPhone к Mac
+## 3. Signing
 
-1. Подключите iPhone к Mac через USB кабель
-2. Разблокируйте iPhone
-3. На iPhone появится запрос "Доверять этому компьютеру?" - нажмите **"Доверять"**
-4. Введите пароль iPhone, если потребуется
+Project `RouteSafetyApp` → Target `RouteSafetyApp` → **Signing & Capabilities**:
 
----
+- Automatically manage signing
+- Team — твой Apple ID (Add Account… если нет)
+- Bundle ID уникальный, если занят: `com.<имя>.routesafety`
 
-### Шаг 3: Настройте Signing в Xcode
+## 4. Устройство и Run
 
-1. **В Xcode:**
+Вверху выбрать iPhone → **Run (▶️)** или `Cmd+R`.  
+Первая сборка долгая. Product → Clean Build Folder — если что-то сломалось.
 
-   - Выберите проект `RouteSafetyApp` (синяя иконка слева в навигаторе)
-   - Выберите Target `RouteSafetyApp`
-   - Перейдите на вкладку **"Signing & Capabilities"**
+## 5. Доверие на iPhone
 
-2. **Настройте подпись:**
+Настройки → Основные → VPN и управление устройством → профиль разработчика → Доверять.
 
-   - ✅ Поставьте галочку **"Automatically manage signing"**
-   - В поле **Team** выберите ваш **бесплатный Apple ID**
-     - Если Apple ID не виден, нажмите "Add Account..." и войдите
-   - **Bundle Identifier**: измените на уникальный, если нужно
-     - Например: `com.yourname.routesafety` (замените `yourname` на ваше имя)
+## 6. Metro (обязательно)
 
-3. **Если появится ошибка "No accounts with team":**
-   - Нажмите "Add Account..."
-   - Введите ваш Apple ID и пароль
-   - Xcode добавит аккаунт автоматически
-
----
-
-### Шаг 4: Выберите устройство
-
-1. В верхней панели Xcode (рядом с кнопкой Run ▶️)
-2. Выберите ваше устройство (iPhone) из списка
-3. Если устройства нет:
-   - Убедитесь, что iPhone разблокирован
-   - Проверьте кабель
-   - На iPhone: **Настройки > Основные > VPN и управление устройством** > нажмите на профиль компьютера > **"Доверять"**
-
----
-
-### Шаг 5: Соберите и установите ⚠️ ВАЖНО!
-
-**Это критический шаг!** Без него приложение НЕ установится на iPhone.
-
-1. **Очистите проект** (опционально, но рекомендуется):
-
-   - **Product > Clean Build Folder** (или `Shift+Cmd+K`)
-
-2. **Установите на iPhone:**
-
-   - ⚠️ **Обязательно нажмите кнопку Run (▶️)** в верхней панели Xcode или нажмите `Cmd+R`
-   - Xcode автоматически соберет проект и установит приложение на iPhone
-   - Это займет несколько минут при первой сборке
-
-3. **Альтернативно** (если хотите только собрать без установки):
-   - **Product > Build** (или `Cmd+B`)
-   - Но для установки все равно нужно нажать **Run (▶️)**
-
----
-
-### Шаг 6: Доверьте разработчику на iPhone
-
-После первой установки:
-
-1. На iPhone: **Настройки > Основные > VPN и управление устройством**
-2. Найдите профиль разработчика (ваш Apple ID)
-3. Нажмите на него
-4. Выберите **"Доверять"**
-5. Подтвердите
-
----
-
-### Шаг 7: Запустите Metro Bundler (сервер разработки) ⚠️ КРИТИЧНО!
-
-**Без этого шага приложение покажет ошибку "no development server found"!**
-
-1. **Откройте новый терминал** (оставьте Xcode открытым)
-
-2. **Запустите Metro bundler:**
-
-   ```bash
-   cd mobileApp
-   npx expo start --dev-client
-   ```
-
-3. **Убедитесь, что iPhone и Mac в одной Wi-Fi сети**
-
-4. **В приложении на iPhone:**
-   - Если появится экран подключения, введите URL из терминала (обычно `exp://192.168.x.x:8081`)
-   - Или отсканируйте QR-код из терминала
-   - Приложение подключится к Metro bundler и загрузится
-
-Теперь приложение должно работать!
-
----
-
-## ⚠️ Частая проблема: "Открыл workspace, но приложение не установилось"
-
-**Проблема:** Вы открыли workspace командой `open ios/RouteSafetyApp.xcworkspace`, Xcode открылся, но приложение не установилось на iPhone.
-
-**Решение:**
-
-- Открытие workspace **только открывает проект** в Xcode
-- Чтобы установить приложение, нужно:
-  1. Настроить Signing (Шаг 3)
-  2. Выбрать устройство (Шаг 4)
-  3. **Нажать кнопку Run (▶️)** в Xcode (Шаг 5)
-
-Без нажатия кнопки Run приложение НЕ установится!
-
----
-
-## Решение проблем
-
-### "No accounts with team"
-
-- Нажмите "Add Account..." в Xcode
-- Войдите с вашим Apple ID
-- Выберите его в списке Team
-
-### "Bundle Identifier is not available"
-
-- Измените Bundle Identifier на уникальный
-- Например: `com.yourname.routesafetyapp`
-- В Xcode или в `app.json`:
-  ```json
-  "bundleIdentifier": "com.yourname.routesafetyapp"
-  ```
-- Затем: `rm -rf ios/ && npx expo prebuild --platform ios`
-
-### "Device not found"
-
-- Убедитесь, что iPhone разблокирован
-- Проверьте кабель
-- На iPhone: **Настройки > Основные > VPN и управление устройством** > доверьте компьютеру
-
-### "Code signing error"
-
-- В Xcode: **Signing & Capabilities**
-- Убедитесь, что выбрана опция "Automatically manage signing"
-- Выберите правильный Team (ваш Apple ID)
-- Очистите проект: **Product > Clean Build Folder**
-
-### "The app cannot be installed"
-
-- На iPhone: **Настройки > Основные > VPN и управление устройством**
-- Найдите профиль разработчика и нажмите **"Доверять"**
-- Убедитесь, что устройство разблокировано
-
-### "no development server found" или "Could not connect to the server"
-
-**Это самая частая проблема после установки приложения!**
-
-**Решение:**
-
-1. **Запустите Metro bundler в терминале:**
-
-   ```bash
-   cd mobileApp
-   npx expo start --dev-client
-   ```
-
-2. **Убедитесь, что iPhone и Mac в одной Wi-Fi сети**
-
-3. **В приложении на iPhone:**
-
-   - Введите URL из терминала (например, `exp://192.168.1.100:8081`)
-   - Или отсканируйте QR-код из терминала
-
-4. **Если не работает:**
-   - Проверьте брандмауэр на Mac (может блокировать порт 8081)
-   - Попробуйте запустить с явным указанием хоста:
-     ```bash
-     npx expo start --dev-client --host tunnel
-     ```
-
----
-
-## Ограничения бесплатного Apple ID
-
-- ⚠️ Приложение работает **7 дней**
-- ⚠️ После 7 дней нужно **пересобрать** (запустить Run в Xcode снова)
-- ✅ Можно устанавливать на несколько устройств
-- ✅ Все функции работают
-
----
-
-## Быстрый старт
+Иначе «no development server found»:
 
 ```bash
-# 1. Откройте проект
-cd mobileApp
-open ios/RouteSafetyApp.xcworkspace
-```
-
-**⚠️ ВАЖНО:** После открытия workspace в Xcode:
-
-1. **В Xcode:**
-
-   - Выберите ваше устройство (iPhone) в верхней панели рядом с кнопкой Run
-   - Откройте проект `RouteSafetyApp` (синяя иконка слева) > Target `RouteSafetyApp` > вкладка **Signing & Capabilities**
-   - ✅ Поставьте галочку **"Automatically manage signing"**
-   - Выберите ваш **Apple ID** в поле Team
-   - ⚠️ **ОБЯЗАТЕЛЬНО нажмите кнопку Run (▶️)** или `Cmd+R` - это соберет и установит приложение!
-
-2. **На iPhone:**
-
-   - После установки: **Настройки > Основные > VPN и управление устройством** > Доверьте разработчику
-
-3. **Запустите Metro bundler** (обязательно!):
-
-   ```bash
-   cd mobileApp
-   npx expo start --dev-client
-   ```
-
-   Без этого приложение покажет ошибку "no development server found"!
-
----
-
-## Полезные команды
-
-```bash
-# Запустить Metro bundler (обязательно после установки приложения!)
 cd mobileApp
 npx expo start --dev-client
-
-# Очистить и пересоздать проект
-cd mobileApp
-rm -rf ios/
-npx expo prebuild --platform ios
-
-# Очистить build в Xcode
-# Product > Clean Build Folder (Shift+Cmd+K)
 ```
 
----
+iPhone и Mac в одной Wi‑Fi. URL из терминала (`exp://…`) или QR.
 
-## Полный порядок запуска (краткая инструкция)
+## Частые проблемы
 
-1. **Откройте проект в Xcode:**
+**Workspace открыл — приложения нет** — не нажали Run.
 
-   ```bash
-   cd mobileApp
-   open ios/RouteSafetyApp.xcworkspace
-   ```
+**No accounts with team** — Add Account в Xcode.
 
-2. **В Xcode:**
+**Bundle ID занят** — сменить в Signing / `app.json`, при необходимости:
 
-   - Настройте Signing (Team = ваш Apple ID)
-   - Выберите устройство (iPhone)
-   - Нажмите **Run (▶️)**
+```bash
+rm -rf ios && npx expo prebuild --platform ios
+```
 
-3. **На iPhone:**
+**no development server** — Metro с `--dev-client`, одна сеть с Mac.
 
-   - Доверьте разработчику в настройках
+**Бесплатный Apple ID** — сборка живёт ~7 дней, потом снова Run в Xcode (или `eas build`).
 
-4. **Запустите Metro bundler** (в новом терминале):
+## Кратко
 
-   ```bash
-   cd mobileApp
-   npx expo start --dev-client
-   ```
-
-5. **В приложении на iPhone:**
-   - Введите URL из терминала или отсканируйте QR-код
-
-Готово! Приложение должно работать.
+```bash
+open ios/RouteSafetyApp.xcworkspace
+# Signing + Run в Xcode
+# Доверие на iPhone
+npx expo start --dev-client
+```

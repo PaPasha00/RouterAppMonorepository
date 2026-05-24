@@ -1,100 +1,48 @@
-# Инструкция по сборке приложения для iOS
+# Сборка iOS через EAS
 
-## Предварительные требования
+## Платный Developer ($99/год)
 
-1. **Apple Developer аккаунт** (стоимость $99/год)
-   - Необходим для подписи приложения
-   - Можно использовать бесплатный аккаунт для разработки (но с ограничениями)
+Нужен для TestFlight / App Store. Для себя на телефоне хватает бесплатного Apple ID — см. `FREE_BUILD_GUIDE.md`.
 
-2. **Установлен EAS CLI** (уже установлен)
-
-## Шаги для сборки
-
-### 1. Создать EAS проект (если еще не создан)
+## EAS
 
 ```bash
 cd mobileApp
 eas project:init
+eas credentials    # ios, preview или production, Automatic
 ```
 
-При запросе ответьте "yes" для создания проекта.
+Preview (тест на устройстве):
 
-### 2. Настроить Apple Developer аккаунт
-
-Для iOS сборки нужно настроить учетные данные Apple Developer:
-
-```bash
-eas credentials
-```
-
-Выберите:
-- Platform: `ios`
-- Выберите профиль: `preview` (для тестирования) или `production` (для App Store)
-
-EAS предложит несколько вариантов:
-- **Automatic (Recommended)** - EAS управляет сертификатами автоматически
-- **Manual** - вы управляете сертификатами вручную
-
-Рекомендуется выбрать Automatic.
-
-### 3. Запустить сборку
-
-#### Для внутреннего тестирования (preview):
 ```bash
 eas build --platform ios --profile preview
 ```
 
-#### Для публикации в App Store (production):
+Production (магазин):
+
 ```bash
 eas build --platform ios --profile production
+eas submit --platform ios
 ```
 
-### 4. Установка на iPhone
-
-После завершения сборки:
-
-1. **Через TestFlight** (рекомендуется):
-   - Соберите production версию
-   - Загрузите в App Store Connect через `eas submit`
-   - Добавьте тестеров в TestFlight
-   - Они получат приглашение на email
-
-2. **Прямая установка** (для preview сборки):
-   - После сборки вы получите ссылку на `.ipa` файл
-   - Установите через Xcode или через веб-интерфейс EAS
-
-### Альтернативный способ (локальная сборка)
-
-Если у вас есть Mac с Xcode:
+## Локально с Xcode
 
 ```bash
-# Создать нативный проект
 npx expo prebuild --platform ios
-
-# Открыть в Xcode
-open ios/route-safety-app.xcworkspace
-
-# В Xcode: Product > Archive
+open ios/RouteSafetyApp.xcworkspace
 ```
 
-## Важные замечания
+Дальше `XCODE_BUILD_GUIDE.md`.
 
-1. **Bundle Identifier**: Убедитесь, что `com.routesafety.app` уникален. Если он занят, измените в `app.json`
+## На что смотреть
 
-2. **API URL**: В `app.json` указан локальный IP `http://172.20.10.3:3001`. Для production нужно:
-   - Использовать публичный URL бэкенда
-   - Или настроить переменные окружения для разных профилей сборки
+- `bundleIdentifier` в `app.json` — уникальный (`com.routesafety.app` или свой).
+- API URL на проде — не локальный IP; `EXPO_PUBLIC_API_BASE_URL` / EAS env.
+- `assets/icon.png`, `assets/splash.png` на месте.
 
-3. **Иконка и Splash**: Убедитесь, что файлы `./assets/icon.png` и `./assets/splash.png` существуют
-
-## Быстрый старт
-
-Если у вас уже настроен Apple Developer аккаунт:
+## Быстрый preview
 
 ```bash
 cd mobileApp
 eas build --platform ios --profile preview
 ```
-
-Следуйте инструкциям в терминале для настройки учетных данных.
-

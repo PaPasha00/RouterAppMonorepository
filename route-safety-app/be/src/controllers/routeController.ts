@@ -12,9 +12,6 @@ import {
   getAnalysisByRouteId,
 } from '../services/savedRouteAnalysisService';
 
-/**
- * Создает новый маршрут
- */
 export async function saveRoute(req: AuthRequest, res: Response): Promise<void> {
   try {
     if (!req.user) {
@@ -47,9 +44,6 @@ export async function saveRoute(req: AuthRequest, res: Response): Promise<void> 
   }
 }
 
-/**
- * Получает все маршруты пользователя
- */
 export function getRoutes(req: AuthRequest, res: Response): void {
   try {
     if (!req.user) {
@@ -65,9 +59,6 @@ export function getRoutes(req: AuthRequest, res: Response): void {
   }
 }
 
-/**
- * Получает маршрут по ID
- */
 export function getRoute(req: AuthRequest, res: Response): void {
   try {
     if (!req.user) {
@@ -83,7 +74,6 @@ export function getRoute(req: AuthRequest, res: Response): void {
       return;
     }
 
-    // Получаем анализ, если есть
     const analysis = getAnalysisByRouteId(id, req.user.id);
 
     res.json({ route, analysis });
@@ -93,9 +83,6 @@ export function getRoute(req: AuthRequest, res: Response): void {
   }
 }
 
-/**
- * Обновляет маршрут
- */
 export function updateRouteHandler(req: AuthRequest, res: Response): void {
   try {
     if (!req.user) {
@@ -120,9 +107,6 @@ export function updateRouteHandler(req: AuthRequest, res: Response): void {
   }
 }
 
-/**
- * Удаляет маршрут
- */
 export function deleteRouteHandler(req: AuthRequest, res: Response): void {
   try {
     if (!req.user) {
@@ -145,9 +129,6 @@ export function deleteRouteHandler(req: AuthRequest, res: Response): void {
   }
 }
 
-/**
- * Сохраняет анализ маршрута
- */
 export async function saveRouteAnalysis(req: AuthRequest, res: Response): Promise<void> {
   try {
     if (!req.user) {
@@ -155,20 +136,8 @@ export async function saveRouteAnalysis(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // routeId берется из URL параметра, а не из body
     const routeId = req.params.id;
     const { analysis, startDate, endDate, tourismType } = req.body;
-
-    console.log('[SAVE ANALYSIS] Request params and body:', {
-      routeIdFromParams: routeId,
-      hasAnalysis: !!analysis,
-      analysisType: typeof analysis,
-      analysisIsObject: analysis && typeof analysis === 'object',
-      analysisKeys: analysis && typeof analysis === 'object' ? Object.keys(analysis) : null,
-      startDate,
-      endDate,
-      tourismType,
-    });
 
     if (!routeId) {
       console.error('[SAVE ANALYSIS] Missing routeId in URL params');
@@ -188,31 +157,6 @@ export async function saveRouteAnalysis(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // Валидация обязательных полей анализа
-    console.log('[SAVE ANALYSIS] Received data:', {
-      routeId,
-      hasAnalysis: !!analysis,
-      analysisKeys: analysis ? Object.keys(analysis) : null,
-      hasAnalysisField: !!analysis?.analysis,
-      hasStats: !!analysis?.stats,
-      hasTerrainType: !!analysis?.terrainType,
-      hasGeographicContext: !!analysis?.geographicContext,
-      hasFormattedGeoContext: !!analysis?.formattedGeoContext,
-      formattedGeoContextValue: analysis?.formattedGeoContext,
-      formattedGeoContextType: typeof analysis?.formattedGeoContext,
-      hasDailyRoutes: !!analysis?.dailyRoutes,
-      dailyRoutesCount: analysis?.dailyRoutes ? (Array.isArray(analysis.dailyRoutes) ? analysis.dailyRoutes.length : 0) : 0,
-      firstDayWeather: analysis?.dailyRoutes && Array.isArray(analysis.dailyRoutes) && analysis.dailyRoutes.length > 0
-        ? {
-            hasWeather: !!analysis.dailyRoutes[0].weather,
-            weatherKeys: analysis.dailyRoutes[0].weather ? Object.keys(analysis.dailyRoutes[0].weather) : null,
-            temperature: analysis.dailyRoutes[0].weather?.temperature,
-            conditions: analysis.dailyRoutes[0].weather?.conditions,
-          }
-        : null,
-    });
-
-    // Проверяем обязательные поля с более детальными сообщениями
     const missingFields: string[] = [];
     
     if (!analysis.analysis || (typeof analysis.analysis === 'string' && analysis.analysis.trim().length === 0)) {
@@ -251,14 +195,12 @@ export async function saveRouteAnalysis(req: AuthRequest, res: Response): Promis
       return;
     }
 
-    // formattedGeoContext может быть пустым, но должен быть строкой
     if (!analysis.formattedGeoContext || typeof analysis.formattedGeoContext !== 'string') {
       analysis.formattedGeoContext = analysis.geographicContext 
         ? JSON.stringify(analysis.geographicContext) 
         : 'Неизвестно';
     }
 
-    // Убеждаемся, что есть dailyRoutes и totalDays
     if (!Array.isArray(analysis.dailyRoutes)) {
       analysis.dailyRoutes = [];
     }
@@ -266,7 +208,6 @@ export async function saveRouteAnalysis(req: AuthRequest, res: Response): Promis
       analysis.totalDays = analysis.dailyRoutes.length || 1;
     }
 
-    // Проверяем, что маршрут принадлежит пользователю
     const route = getRouteById(routeId, req.user.id);
     if (!route) {
       res.status(404).json({ error: 'Маршрут не найден' });

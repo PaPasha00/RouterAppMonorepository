@@ -347,12 +347,10 @@ export function generateAnalysisPrompt(
 
   const includeRecommendations = request.includeAIRecommendations !== false; // По умолчанию true
   
-  // Определяем тип маршрута для более точных рекомендаций
   const tourismType = request.tourismType || 'пеший';
   let tourismTypeNote = '';
   
   if (tourismType.toLowerCase().includes('водный')) {
-    // Формируем информацию о координатах для определения реки
     const coordsInfo = request.coordinates.length > 0 
       ? `\nКоординаты маршрута (первые и последние точки):\n- Начало: ${request.coordinates[0][0]}, ${request.coordinates[0][1]}\n- Конец: ${request.coordinates[request.coordinates.length - 1][0]}, ${request.coordinates[request.coordinates.length - 1][1]}\n- Всего точек: ${request.coordinates.length}`
       : '';
@@ -370,23 +368,10 @@ export function generateAnalysisPrompt(
   let recommendationsNote = '';
   if (!includeRecommendations) {
     recommendationsNote = '\n\nВАЖНО: Пользователь НЕ хочет получать рекомендации. Оставь поле recommendations пустым массивом [] в summary и в каждом дне.';
-    console.log('🔕 Рекомендации ИИ отключены пользователем - промпт изменен');
-    console.log('📝 Добавлена инструкция в промпт: "Оставь поле recommendations пустым массивом []"');
   } else {
     recommendationsNote = `\n\nВАЖНО: Обязательно заполни поле recommendations полезными рекомендациями для этого маршрута. Для длинных и сложных маршрутов дай детальные рекомендации по экипировке, безопасности, питанию, ночевкам и другим важным аспектам. В каждом дне также добавь рекомендации, если они уместны.${tourismTypeNote}`;
-    console.log('✅ Рекомендации ИИ включены - будут включены в ответ');
-    console.log('📝 Добавлена инструкция в промпт: "Обязательно заполни поле recommendations"');
-    console.log(`🎯 Тип маршрута: ${tourismType} - рекомендации будут адаптированы под этот тип`);
-  }
-  
-  console.log(`⚙️ Параметр includeAIRecommendations из запроса: ${request.includeAIRecommendations} (обработано как: ${includeRecommendations})`);
-  
-  // Логируем часть промпта с рекомендациями для проверки
-  if (recommendationsNote) {
-    console.log('📋 Фрагмент промпта с инструкцией о рекомендациях:', recommendationsNote.substring(0, 100) + '...');
   }
 
-  // Генерируем критерии оценки сложности в зависимости от типа маршрута
   const difficultyCriteria = generateDifficultyCriteria(
     request.tourismType || 'пеший',
     request.lengthKm,
@@ -463,9 +448,9 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
 
     const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
     const maxTokensEnv = process.env.OPENROUTER_MAX_TOKENS;
-    const defaultMax = 12000; // укладываемся в типичный лимит кредитов OpenRouter; при необходимости задать в .env OPENROUTER_MAX_TOKENS
+    const defaultMax = 12000; // OPENROUTER_MAX_TOKENS в .env
     const maxTokens = maxTokensEnv ? Math.min(Math.max(parseInt(maxTokensEnv, 10) || defaultMax, 1000), 16000) : defaultMax;
-    console.log('🤖 Отправка запроса к ИИ... (model:', model, ', max_tokens:', maxTokens, ')');
+    console.log(' Отправка запроса к ИИ... (model:', model, ', max_tokens:', maxTokens, ')');
 
     const response = await axios.post(
       'https://openrouter.ai/api/v1/chat/completions',
@@ -489,7 +474,7 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
           { role: 'user', content: prompt },
         ],
         max_tokens: maxTokens,
-        temperature: 0.3, // Снижено для более детерминированных ответов
+        temperature: 0.3,
         response_format: { type: 'json_object' }, // Принудительный JSON формат (если поддерживается моделью)
       },
       {
@@ -509,10 +494,10 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
     let parsed: any | undefined = undefined;
     try {
       parsed = JSON.parse(content);
-      console.log('✅ JSON успешно распарсен');
+      console.log(' JSON успешно распарсен');
     } catch (parseError: any) {
       // Если вдруг вернулся нестрогий JSON, пытаемся найти JSON в тексте
-      console.log('⚠️ Прямой парсинг не удался, пытаемся найти JSON в тексте...');
+      console.log(' Прямой парсинг не удался, пытаемся найти JSON в тексте...');
       console.log('Первые 500 символов ответа:', content.substring(0, 500));
       
       // Пытаемся найти JSON объект в тексте (между { и })
@@ -520,13 +505,13 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
       if (jsonMatch) {
         try {
           parsed = JSON.parse(jsonMatch[0]);
-          console.log('✅ JSON найден и распарсен из текста');
+          console.log(' JSON найден и распарсен из текста');
         } catch (e) {
-          console.error('❌ Не удалось распарсить найденный JSON:', e);
+          console.error(' Не удалось распарсить найденный JSON:', e);
           parsed = undefined;
         }
       } else {
-        console.error('❌ JSON объект не найден в ответе');
+        console.error(' JSON объект не найден в ответе');
         console.error('Полный ответ ИИ:', content);
         parsed = undefined;
       }
@@ -537,13 +522,13 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
     if (parsed) {
       validatedResponse = validateAndNormalizeAIResponse(parsed);
       if (!validatedResponse) {
-        console.error('❌ Валидация ответа ИИ не прошла. Сырой ответ:', JSON.stringify(parsed, null, 2));
+        console.error(' Валидация ответа ИИ не прошла. Сырой ответ:', JSON.stringify(parsed, null, 2));
       } else {
-        console.log('✅ Ответ ИИ успешно валидирован и нормализован');
+        console.log(' Ответ ИИ успешно валидирован и нормализован');
       }
     }
 
-    console.log('📊 Итоговый статус ответа ИИ:', {
+    console.log(' Итоговый статус ответа ИИ:', {
       hasText: !!content,
       hasRawJson: !!parsed,
       hasValidatedJson: !!validatedResponse,
@@ -553,7 +538,7 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
     });
     
     if (!validatedResponse) {
-      console.error('❌ Валидный JSON не получен! Содержимое ответа:');
+      console.error(' Валидный JSON не получен! Содержимое ответа:');
       console.error(content.substring(0, 1000));
     }
     
@@ -562,9 +547,9 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
     const status = error?.response?.status;
     const data = error?.response?.data;
     if (status) {
-      console.error('❌ Ошибка при обращении к ИИ:', status, typeof data === 'string' ? data : JSON.stringify(data));
+      console.error(' Ошибка при обращении к ИИ:', status, typeof data === 'string' ? data : JSON.stringify(data));
     } else {
-      console.error('❌ Ошибка при обращении к ИИ:', (error as Error).message);
+      console.error(' Ошибка при обращении к ИИ:', (error as Error).message);
     }
     if (error?.response) throw error;
     if (status === 401) {

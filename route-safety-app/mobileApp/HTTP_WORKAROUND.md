@@ -1,16 +1,10 @@
-# Как заставить HTTP работать в Expo
+# HTTP и dev build
 
-## Проблема
+Expo Go режет cleartext к внешнему API. Для `http://…:3001` нужен development build.
 
-Expo Go блокирует HTTP запросы к внешним серверам из соображений безопасности.
+## Собрать один раз
 
-## Решение: Development Build
-
-Для работы с HTTP запросами **обязательно** нужно использовать Development Build, а не Expo Go.
-
-### Шаг 1: Создайте Development Build
-
-**Для iOS:**
+iOS:
 
 ```bash
 cd mobileApp
@@ -18,59 +12,34 @@ npx expo prebuild --clean
 npx expo run:ios
 ```
 
-**Для Android:**
+Android:
 
 ```bash
-cd mobileApp
-npx expo prebuild --clean
 npx expo run:android
 ```
 
-### Шаг 2: Запустите с dev-client
-
-После создания build, запустите:
+## Запуск
 
 ```bash
 npx expo start --dev-client
 ```
 
-### Что было настроено:
+## Что уже в конфиге
 
-1. **app.config.js**:
+`app.config.js` / `Info.plist`:
 
-   - `NSAllowsArbitraryLoads: true` для iOS
-   - `usesCleartextTraffic: true` для Android
-   - Исключения для `46.188.41.57`, `localhost`, `172.20.10.2`
-   - Production URL: `http://46.188.41.57:3011`
+- iOS: `NSAllowsArbitraryLoads`, исключения для IP API и localhost
+- Android: `usesCleartextTraffic: true`
 
-2. **Info.plist**:
+Production API сейчас `http://46.188.41.57:3011` — в dev часто свой IP, см. `NETWORK_FIX.md`.
 
-   - `NSAllowsArbitraryLoads: true`
-   - Исключения для всех нужных доменов
+## Проверка
 
-3. **app.json**:
-   - Те же настройки для совместимости
-
-### Важно:
-
-⚠️ **Expo Go НЕ ПОДДЕРЖИВАЕТ HTTP запросы к внешним серверам!**
-
-Это ограничение самого приложения Expo Go, которое нельзя обойти. Development Build - единственный способ использовать HTTP запросы.
-
-### После создания Development Build:
-
-1. Приложение будет использовать ваши настройки безопасности
-2. HTTP запросы будут работать
-3. Все API вызовы будут проходить успешно
-
-### Проверка:
-
-После запуска Development Build проверьте логи:
+В логах приложения:
 
 ```
-[API CONFIG] Определен базовый URL: http://46.188.41.57:3011
-[API] Отправка запроса: { url: 'http://46.188.41.57:3011/api/...' }
+[API CONFIG] Определен базовый URL: http://...
 [API] Ответ получен: { status: 200, ... }
 ```
 
-Если видите эти логи и статус 200 - все работает!
+Сеть: `NETWORK_FIX.md`, Expo Go: `EXPO_GO_LIMITATION.md`.

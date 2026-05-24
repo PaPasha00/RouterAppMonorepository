@@ -88,7 +88,7 @@ export async function getGeographicContext(coordinates: LatLngTuple[]): Promise<
     const uniquePoints = Array.from(new Set(samplePoints.map(p => p.join(','))))
       .map(str => str.split(',').map(Number)) as LatLngTuple[];
 
-    console.log(`🌍 Анализируем ${uniquePoints.length} точек маршрута для определения регионов`);
+    console.log(` Анализируем ${uniquePoints.length} точек маршрута для определения регионов`);
 
     // Анализируем каждую точку
     const locationPromises = uniquePoints.map(async (point, index) => {
@@ -218,7 +218,7 @@ export async function getRiverNameFromCoordinates(coordinates: LatLngTuple[]): P
         if (name) seenNames.add(name);
       }
     } catch (err) {
-      console.log('  ⚠️ Overpass (река по координатам):', (err as Error).message);
+      console.log('   Overpass (река по координатам):', (err as Error).message);
     }
   }
 

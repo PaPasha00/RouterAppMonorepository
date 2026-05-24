@@ -57,7 +57,6 @@ export default function RouteDetailsScreen() {
   const handleOpenOnHome = () => {
     if (!route) return;
     
-    // Устанавливаем маршрут для загрузки на главной странице
     setRouteToLoad({
       points: route.coordinates,
       roadRouting: route.roadRouting,
@@ -87,18 +86,9 @@ export default function RouteDetailsScreen() {
   }
 
   const structuredAnalysis = analysis?.analysisStructured;
-  // Используем dailyRoutes из анализа, если они есть, иначе из structuredAnalysis.days
   const daysWithWeather = analysis?.dailyRoutes && Array.isArray(analysis.dailyRoutes) && analysis.dailyRoutes.length > 0 
     ? analysis.dailyRoutes 
     : structuredAnalysis?.days || [];
-  
-  // Логирование для отладки
-  console.log('[ROUTE DETAILS] daysWithWeather:', {
-    source: analysis?.dailyRoutes && analysis.dailyRoutes.length > 0 ? 'dailyRoutes' : 'structuredAnalysis.days',
-    count: daysWithWeather.length,
-    firstDayHasWeather: daysWithWeather.length > 0 ? !!daysWithWeather[0].weather : false,
-    firstDayWeatherData: daysWithWeather.length > 0 && daysWithWeather[0].weather ? daysWithWeather[0].weather : null,
-  });
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>

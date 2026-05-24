@@ -6,20 +6,15 @@ import { WeatherService } from './weatherService';
 import { WebSearchService } from './webSearchService';
 import { RouteAnalysisRequest, RouteAnalysisResponse, DailyRoute } from '../types';
 
-/**
- * Сервис для анализа маршрутов
- */
 export class RouteAnalysisService {
   private elevationService = new ElevationService();
   private weatherService = new WeatherService();
   private webSearchService = new WebSearchService();
 
-  /**
-   * Выполняет полный анализ маршрута без любых заглушек/рандомизации
-   */
+  /** Полный анализ маршрута */
   async analyzeRoute(request: RouteAnalysisRequest): Promise<RouteAnalysisResponse> {
     try {
-      console.log('📊 Получены данные для анализа маршрута:');
+      console.log(' Получены данные для анализа маршрута:');
       console.log(`- Длина: ${request.lengthKm} км (${request.lengthMeters} м)`);
       console.log(`- Набор высоты (из запроса): ${request.elevationGain} м`);
       console.log(`- Количество точек: ${request.coordinates?.length || 0}`);
@@ -35,7 +30,7 @@ export class RouteAnalysisService {
       const needFetch = elevationData.length !== coordsLen;
 
       if (needFetch) {
-        console.log('🔄 elevationData отсутствует/некорректен — запрашиваем высоты по координатам...');
+        console.log(' elevationData отсутствует/некорректен — запрашиваем высоты по координатам...');
         const elevResp = await this.elevationService.getElevationData({ coordinates: request.coordinates });
         const results = elevResp.results || [];
         elevationData = results.map(r => Number(r.elevation) || 0);
@@ -81,16 +76,16 @@ export class RouteAnalysisService {
       let usePointsSystem = request.usePointsSystem !== false; // По умолчанию true
       if (!isPointsSystemAllowed) {
         usePointsSystem = false;
-        console.log(`ℹ️ Система очков отключена для типа туризма "${request.tourismType}" (доступна только для: ${pointsSystemAllowedTypes.join(', ')})`);
+        console.log(` Система очков отключена для типа туризма "${request.tourismType}" (доступна только для: ${pointsSystemAllowedTypes.join(', ')})`);
       } else if (usePointsSystem) {
-        console.log(`✅ Система очков включена для типа туризма "${request.tourismType}"`);
+        console.log(` Система очков включена для типа туризма "${request.tourismType}"`);
       }
 
       const pointsPerDay = request.pointsPerDay || 20; // По умолчанию 20 очков в день
 
       let dailyRoutes: DailyRoute[];
       if (usePointsSystem) {
-        console.log(`📅 Разбивка маршрута на основе очков (лимит: ${pointsPerDay} очков/день)...`);
+        console.log(` Разбивка маршрута на основе очков (лимит: ${pointsPerDay} очков/день)...`);
         dailyRoutes = await this.splitRouteByDays(
           request.coordinates,
           elevationData,
@@ -101,7 +96,7 @@ export class RouteAnalysisService {
           pointsPerDay
         );
       } else {
-        console.log(`📅 Равномерная разбивка маршрута на ${totalDays} дней...`);
+        console.log(` Равномерная разбивка маршрута на ${totalDays} дней...`);
         dailyRoutes = await this.splitRouteByDaysEvenly(
           request.coordinates,
           elevationData,
@@ -112,22 +107,22 @@ export class RouteAnalysisService {
         );
       }
 
-      console.log(`✅ Получена информация по ${dailyRoutes.length} дням`);
+      console.log(` Получена информация по ${dailyRoutes.length} дням`);
 
       // Поиск информации в интернете о маршруте
-      console.log('🔍 Поиск информации о маршруте в интернете...');
+      console.log(' Поиск информации о маршруте в интернете...');
       const isWater = (request.tourismType || '').toLowerCase().includes('водный');
       let riverName: string | null = null;
       if (isWater && request.coordinates?.length >= 2) {
         try {
           riverName = await getRiverNameFromCoordinates(request.coordinates);
           if (riverName) {
-            console.log('  🏞️ По координатам определена река:', riverName);
+            console.log('   По координатам определена река:', riverName);
           } else {
-            console.log('  ℹ️ Не удалось определить реку по координатам (Overpass), поиск по региону');
+            console.log('   Не удалось определить реку по координатам (Overpass), поиск по региону');
           }
         } catch (e) {
-          console.log('  ⚠️ Ошибка определения реки по координатам:', (e as Error).message);
+          console.log('   Ошибка определения реки по координатам:', (e as Error).message);
         }
       }
       const webSearchResult = await this.webSearchService.searchRouteInformation(
@@ -140,17 +135,17 @@ export class RouteAnalysisService {
       const sourceUrls = webSearchResult.sourceUrls || [];
 
       if (webSearchInfo) {
-        console.log('✅ Найдена информация из интернета (длина:', webSearchInfo.length, 'символов, источников:', sourceUrls.length, ')');
+        console.log(' Найдена информация из интернета (длина:', webSearchInfo.length, 'символов, источников:', sourceUrls.length, ')');
         if (sourceUrls.length > 0) {
-          console.log('🔗 Ссылки, использованные для анализа маршрута:');
+          console.log(' Ссылки, использованные для анализа маршрута:');
           sourceUrls.forEach((url, i) => console.log(`   ${i + 1}. ${url}`));
         }
       } else {
-        console.log('ℹ️ Информация из интернета не найдена или web search недоступен');
+        console.log(' Информация из интернета не найдена или web search недоступен');
       }
 
       // Генерация промпта и запрос к ИИ (JSON-ответ)
-      console.log(`⚙️ Настройки из запроса: usePointsSystem=${request.usePointsSystem}, pointsPerDay=${request.pointsPerDay}, includeAIRecommendations=${request.includeAIRecommendations}`);
+      console.log(` Настройки из запроса: usePointsSystem=${request.usePointsSystem}, pointsPerDay=${request.pointsPerDay}, includeAIRecommendations=${request.includeAIRecommendations}`);
       const prompt = generateAnalysisPrompt(
         { ...request, elevationData, elevationGain },
         terrainType,
@@ -162,37 +157,7 @@ export class RouteAnalysisService {
         sourceUrls,
         riverName ?? undefined
       );
-      console.log('🤖 Отправка запроса к ИИ...');
       const ai = await analyzeRouteWithAI(prompt);
-      console.log('✅ Ответ ИИ получен');
-
-      // Логирование структуры ответа от ИИ для проверки
-      const recommendationsCount = ai.json?.recommendations?.length || 0;
-      const daysWithRecommendations = ai.json?.days?.filter((d: any) => d.recommendations && d.recommendations.length > 0).length || 0;
-
-      console.log('📋 Структура ответа ИИ:', {
-        hasText: !!ai.text,
-        hasJson: !!ai.json,
-        jsonKeys: ai.json ? Object.keys(ai.json) : null,
-        summary: ai.json?.summary,
-        stats: ai.json?.stats,
-        geography: ai.json?.geography,
-        daysCount: ai.json?.days?.length || 0,
-        recommendationsCount,
-        daysWithRecommendations,
-        warningsCount: ai.json?.warnings?.length || 0,
-      });
-
-      // Проверка соответствия настройки и ответа
-      if (request.includeAIRecommendations === false) {
-        if (recommendationsCount > 0 || daysWithRecommendations > 0) {
-          console.warn('⚠️ ВНИМАНИЕ: Рекомендации отключены, но ИИ вернул рекомендации!');
-        } else {
-          console.log('✅ Проверка пройдена: рекомендации отключены, и ИИ не вернул рекомендации');
-        }
-      } else {
-        console.log(`✅ Рекомендации включены: получено ${recommendationsCount} общих рекомендаций и ${daysWithRecommendations} дней с рекомендациями`);
-      }
 
       return {
         analysis: ai.text,
@@ -206,7 +171,7 @@ export class RouteAnalysisService {
         sourceUrls: sourceUrls.length > 0 ? sourceUrls : undefined,
       };
     } catch (error: any) {
-      console.error('❌ Ошибка анализа маршрута (service):', error?.message || error);
+      console.error(' Ошибка анализа маршрута (service):', error?.message || error);
       throw new Error('Не удалось проанализировать маршрут');
     }
   }
@@ -233,8 +198,6 @@ export class RouteAnalysisService {
     totalDays: number,
     pointsPerDay: number = 20
   ): Promise<DailyRoute[]> {
-    // Упрощенная версия - полная версия слишком большая
-    // Используем равномерную разбивку как fallback
     return this.splitRouteByDaysEvenly(coordinates, elevationData, totalLengthKm, totalElevationGain, startDate, totalDays);
   }
 

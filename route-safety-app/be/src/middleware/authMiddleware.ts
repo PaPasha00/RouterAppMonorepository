@@ -13,7 +13,7 @@ export interface AuthRequest extends Request {
 }
 
 /**
- * Middleware для проверки JWT токена
+ * JWT auth middleware
  */
 export function authenticateToken(req: AuthRequest, res: Response, next: NextFunction): void {
   const authHeader = req.headers['authorization'];
@@ -33,7 +33,6 @@ export function authenticateToken(req: AuthRequest, res: Response, next: NextFun
       return;
     }
 
-    // Добавляем информацию о пользователе в запрос
     req.user = {
       id: user.id,
       email: user.email,

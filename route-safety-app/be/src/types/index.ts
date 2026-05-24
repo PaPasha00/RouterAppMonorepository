@@ -152,7 +152,7 @@ export interface AIAnalysisDay {
 /** Один источник информации: ссылка + что именно взято из неё для отчёта */
 export interface AIAnalysisSourceUsed {
   url: string;
-  usedFor: string; // Краткое описание: что взято из этого источника (например: "Описание порогов на реке", "Рекомендации по стоянкам")
+  usedFor: string;
 }
 
 export interface AIAnalysisResponse {
@@ -162,6 +162,5 @@ export interface AIAnalysisResponse {
   days: AIAnalysisDay[];
   recommendations: string[];
   warnings: string[];
-  /** Источники: откуда взята информация (обязательно заполнять при использовании веб-поиска) */
   sourcesUsed?: AIAnalysisSourceUsed[];
 }

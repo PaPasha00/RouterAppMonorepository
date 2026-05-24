@@ -83,7 +83,6 @@ export class MapService {
 
     const url = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=${zoom}&size=${width}x${height}&maptype=satellite&markers=color:red%7C${lat},${lng}&key=${this.googleApiKey}`;
     
-    // Проверяем, что URL доступен
     const response = await axios.head(url);
     if (response.status !== 200) {
       throw new Error('Google Maps API недоступен');
@@ -101,7 +100,6 @@ export class MapService {
   ): Promise<string> {
     const url = `https://static-maps.yandex.ru/1.x/?ll=${lng},${lat}&z=${zoom}&l=sat&size=${width},${height}&pt=${lng},${lat},pm2rdm`;
     
-    // Проверяем, что URL доступен
     const response = await axios.head(url);
     if (response.status !== 200) {
       throw new Error('Yandex Maps API недоступен');
@@ -117,10 +115,10 @@ export class MapService {
     width: number,
     height: number
   ): Promise<string> {
-    // Используем OpenStreetMap через статический API
-    const url = `https://api.mapbox.com/styles/v1/mapbox/streets-v11/static/pin-s-l+000(${lng},${lat})/${lng},${lat},${zoom}/${width}x${height}?access_token=pk.eyJ1IjoibWFwYm94IiwiYSI6ImNpejY4NXVycTA2emYycXBndHRqcmZ3N3gifQ.rJcFIG214AriISLbB6B5aw`;
-    
-    // Проверяем, что URL доступен
+    const url =
+      `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}` +
+      `&zoom=${zoom}&size=${width}x${height}&markers=${lat},${lng},red`;
+
     const response = await axios.head(url);
     if (response.status !== 200) {
       throw new Error('OpenStreetMap API недоступен');

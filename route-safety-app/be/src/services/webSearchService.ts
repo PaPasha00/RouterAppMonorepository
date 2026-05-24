@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// Предпочтительные источники с туристскими отчётами и библиотеками маршрутов.
-// Эти домены будут дополнительно пробиваться в web search перед ответом ИИ.
+// Домены с отчётами о маршрутах — доп. запросы в Tavily
 const PREFERRED_MOUNTAIN_SOURCES: string[] = [
   'turclubmai.ru',
   'tlib.ru',
@@ -43,21 +42,20 @@ export class WebSearchService {
   private baseUrl = 'https://api.tavily.com';
 
   constructor() {
-    // Загружаем переменные окружения на случай, если они еще не загружены
+    // dotenv, если ключ ещё не в process.env
     if (typeof process.env.TAVILY_API_KEY === 'undefined') {
       try {
         require('dotenv').config();
       } catch (e) {
-        // Игнорируем ошибки, если dotenv уже загружен
       }
     }
     
     this.apiKey = process.env.TAVILY_API_KEY || '';
     if (!this.apiKey) {
-      console.warn('⚠️ TAVILY_API_KEY не настроен. Web search будет недоступен.');
+      console.warn(' TAVILY_API_KEY не настроен. Web search будет недоступен.');
       console.warn('   Проверьте, что ключ добавлен в be/.env файл и сервер перезапущен.');
     } else {
-      console.log('✅ TAVILY_API_KEY загружен, web search доступен');
+      console.log(' TAVILY_API_KEY загружен, web search доступен');
     }
   }
 
@@ -92,7 +90,7 @@ export class WebSearchService {
           `водный маршрут река ${riverName.trim()} ${region} описание`,
           `река ${riverName.trim()} координаты ${centerLat.toFixed(4)} ${centerLng.toFixed(4)}`,
         ];
-        console.log(`  🏞️ Поиск привязан к реке: "${riverName.trim()}"`);
+        console.log(`   Поиск привязан к реке: "${riverName.trim()}"`);
       } else {
         baseQueries = [
           `река ${locality} ${region} координаты ${centerLat.toFixed(4)} ${centerLng.toFixed(4)}`,
@@ -114,7 +112,7 @@ export class WebSearchService {
 
       for (const query of queries) {
         try {
-          console.log(`  🔎 Поиск: "${query}"`);
+          console.log(`   Поиск: "${query}"`);
           const response = await axios.post(
             `${this.baseUrl}/search`,
             {
@@ -134,7 +132,7 @@ export class WebSearchService {
           );
 
           if (response.data?.answer) {
-            console.log(`  ✅ Найден ответ (${response.data.answer.length} символов)`);
+            console.log(`   Найден ответ (${response.data.answer.length} символов)`);
             results.push(response.data.answer);
           }
 
@@ -146,11 +144,11 @@ export class WebSearchService {
               if (snippet) results.push(snippet);
             }
             if (items.length > 0) {
-              console.log(`  ✅ Найдено ${items.length} результатов`);
+              console.log(`   Найдено ${items.length} результатов`);
             }
           }
         } catch (error: any) {
-          console.warn(`  ⚠️ Ошибка поиска для запроса "${query}":`, error.message);
+          console.warn(`   Ошибка поиска для запроса "${query}":`, error.message);
           // Продолжаем с другими запросами
         }
       }
@@ -158,18 +156,18 @@ export class WebSearchService {
       if (results.length > 0) {
         const urlsList = Array.from(sourceUrls);
         const combinedInfo = `ИНФОРМАЦИЯ ИЗ ИНТЕРНЕТА О РЕКЕ И МАРШРУТЕ:\n${results.join('\n\n')}\n`;
-        console.log(`  📊 Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников, URL: ${urlsList.length}`);
+        console.log(`   Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников, URL: ${urlsList.length}`);
         if (urlsList.length > 0) {
-          console.log('  🔗 Ссылки, по которым получена информация о реке/маршруте:');
+          console.log('   Ссылки, по которым получена информация о реке/маршруте:');
           urlsList.forEach((url, i) => console.log(`     ${i + 1}. ${url}`));
         }
         return { text: combinedInfo, sourceUrls: urlsList };
       } else {
-        console.log(`  ℹ️ Информация не найдена для водного маршрута`);
+        console.log(`   Информация не найдена для водного маршрута`);
         return empty;
       }
     } catch (error: any) {
-      console.error('❌ Ошибка web search для реки:', error.message);
+      console.error(' Ошибка web search для реки:', error.message);
       return empty;
     }
   }
@@ -226,7 +224,7 @@ export class WebSearchService {
 
       for (const query of queries) {
         try {
-          console.log(`  🔎 Поиск: "${query}"`);
+          console.log(`   Поиск: "${query}"`);
           const response = await axios.post(
             `${this.baseUrl}/search`,
             {
@@ -246,7 +244,7 @@ export class WebSearchService {
           );
 
           if (response.data?.answer) {
-            console.log(`  ✅ Найден ответ (${response.data.answer.length} символов)`);
+            console.log(`   Найден ответ (${response.data.answer.length} символов)`);
             results.push(response.data.answer);
           }
 
@@ -258,29 +256,29 @@ export class WebSearchService {
               if (snippet) results.push(snippet);
             }
             if (items.length > 0) {
-              console.log(`  ✅ Найдено ${items.length} результатов`);
+              console.log(`   Найдено ${items.length} результатов`);
             }
           }
         } catch (error: any) {
-          console.warn(`  ⚠️ Ошибка поиска для запроса "${query}":`, error.message);
+          console.warn(`   Ошибка поиска для запроса "${query}":`, error.message);
         }
       }
 
       if (results.length > 0) {
         const urlsList = Array.from(sourceUrls);
         const combinedInfo = `ИНФОРМАЦИЯ ИЗ ИНТЕРНЕТА О МАРШРУТЕ:\n${results.join('\n\n')}\n`;
-        console.log(`  📊 Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников, URL: ${urlsList.length}`);
+        console.log(`   Всего собрано информации: ${combinedInfo.length} символов из ${results.length} источников, URL: ${urlsList.length}`);
         if (urlsList.length > 0) {
-          console.log('  🔗 Ссылки, по которым получена информация о маршруте:');
+          console.log('   Ссылки, по которым получена информация о маршруте:');
           urlsList.forEach((url, i) => console.log(`     ${i + 1}. ${url}`));
         }
         return { text: combinedInfo, sourceUrls: urlsList };
       } else {
-        console.log(`  ℹ️ Информация не найдена для маршрута`);
+        console.log(`   Информация не найдена для маршрута`);
         return empty;
       }
     } catch (error: any) {
-      console.error('❌ Ошибка web search для маршрута:', error.message);
+      console.error(' Ошибка web search для маршрута:', error.message);
       return empty;
     }
   }
@@ -297,7 +295,7 @@ export class WebSearchService {
   ): Promise<WebSearchResult> {
     const empty: WebSearchResult = { text: '', sourceUrls: [] };
     if (!this.apiKey) {
-      console.log('ℹ️ Web search пропущен: TAVILY_API_KEY не настроен');
+      console.log(' Web search пропущен: TAVILY_API_KEY не настроен');
       return empty;
     }
 

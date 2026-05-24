@@ -28,7 +28,6 @@ import { isAuthenticated } from "../../../services/authService";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
-// Функция для получения эмодзи по условиям погоды
 function getWeatherEmoji(conditions: string): string {
   const cond = conditions.toLowerCase();
   if (cond.includes("ясно") || cond.includes("солнечно")) return "☀️";
@@ -44,29 +43,26 @@ function getWeatherEmoji(conditions: string): string {
   return "🌤️";
 }
 
-// Функция для получения эмодзи ветра по скорости
 function getWindEmoji(windSpeed: number): string {
-  if (windSpeed >= 15) return "💨"; // Сильный ветер
-  if (windSpeed >= 10) return "🌬️"; // Умеренный ветер
-  return "🍃"; // Легкий ветер
+  if (windSpeed >= 15) return "💨";
+  if (windSpeed >= 10) return "🌬️";
+  return "🍃";
 }
 
-// Функция для получения эмодзи осадков
 function getPrecipitationEmoji(precipitation: number): string {
-  if (precipitation >= 10) return "🌧️"; // Сильные осадки
-  if (precipitation >= 5) return "🌦️"; // Умеренные осадки
-  if (precipitation > 0) return "💧"; // Легкие осадки
-  return "☀️"; // Без осадков
+  if (precipitation >= 10) return "🌧️";
+  if (precipitation >= 5) return "🌦️";
+  if (precipitation > 0) return "💧";
+  return "☀️";
 }
 
-// Функция для получения цвета фона по температуре
 function getTemperatureColor(min: number, max: number): string {
   const avg = (min + max) / 2;
-  if (avg >= 25) return "#FF6B6B"; // Жарко - красный
-  if (avg >= 15) return "#4ECDC4"; // Тепло - бирюзовый
-  if (avg >= 5) return "#95E1D3"; // Прохладно - светло-бирюзовый
-  if (avg >= -5) return "#A8E6CF"; // Холодно - светло-зеленый
-  return "#B8D4F0"; // Очень холодно - светло-голубой
+  if (avg >= 25) return "#FF6B6B";
+  if (avg >= 15) return "#4ECDC4";
+  if (avg >= 5) return "#95E1D3";
+  if (avg >= -5) return "#A8E6CF";
+  return "#B8D4F0";
 }
 
 export default function ExploreScreen() {
@@ -87,7 +83,6 @@ export default function ExploreScreen() {
   );
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
 
-  // Single picker control
   const [pickerOpen, setPickerOpen] = useState(false);
   const [activePicker, setActivePicker] = useState<"start" | "end" | null>(
     null
@@ -111,18 +106,12 @@ export default function ExploreScreen() {
   }, [route?.points]);
 
   const handleStartDateChange = (_: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      // On Android inline control is a dialog; we keep our modal consistent
-    }
     if (selectedDate) {
       setStartDateObj(selectedDate);
     }
   };
 
   const handleEndDateChange = (_: any, selectedDate?: Date) => {
-    if (Platform.OS === "android") {
-      // keep modal open until explicit actions
-    }
     if (selectedDate) {
       setEndDateObj(selectedDate);
     }
@@ -130,7 +119,6 @@ export default function ExploreScreen() {
 
   const tourismTypes = ["пеший", "водный", "автомобильный"];
 
-  // Функция для проверки, доступен ли тип туризма
   const isTourismTypeAvailable = (type: string): boolean => {
     if (type === "водный") {
       // Водный доступен только если выбран водный маршрут
@@ -143,7 +131,6 @@ export default function ExploreScreen() {
     return true; // Пеший всегда доступен
   };
 
-  // Автоматически устанавливаем тип туризма при изменении режима маршрута
   useEffect(() => {
     if (!route) return;
 
@@ -213,11 +200,9 @@ export default function ExploreScreen() {
       );
       const lengthKm = route.lengthKm;
 
-      // Загружаем настройки для передачи на бэкенд
       const { getSettings, clearSettingsCache } = await import(
         "../../../store/settingsStore"
       );
-      // Сбрасываем кэш, чтобы получить актуальные настройки
       clearSettingsCache();
       const settings = getSettings();
       console.log("[Explore ANALYZE] Используемые настройки:", settings);
@@ -273,29 +258,6 @@ export default function ExploreScreen() {
         throw error;
       }
 
-      // Логирование для проверки данных от ИИ
-      console.log("[Explore ANALYZE] Response received:", {
-        hasAnalysis: !!result.analysis,
-        hasAnalysisStructured: !!result.analysisStructured,
-        analysisStructuredKeys: result.analysisStructured
-          ? Object.keys(result.analysisStructured)
-          : null,
-        summary: result.analysisStructured?.summary,
-        stats: result.analysisStructured?.stats,
-        geography: result.analysisStructured?.geography,
-        days: result.analysisStructured?.days?.length || 0,
-        recommendations:
-          result.analysisStructured?.recommendations?.length || 0,
-        warnings: result.analysisStructured?.warnings?.length || 0,
-        dailyRoutes: result.dailyRoutes?.length || 0,
-        dailyRoutesWeather:
-          result.dailyRoutes?.map((d: any) => ({
-            day: d.day,
-            date: d.date,
-            weather: d.weather,
-          })) || [],
-      });
-
       setLoadingStep(4);
       setLoadingProgress(90);
       await new Promise((r) => setTimeout(r, 500));
@@ -338,7 +300,6 @@ export default function ExploreScreen() {
 
     setSavingRoute(true);
     try {
-      // Сохраняем маршрут
       const savedRoute = await saveRoute({
         name: routeName.trim(),
         description: routeDescription.trim() || undefined,
@@ -349,46 +310,19 @@ export default function ExploreScreen() {
         lengthKm: route.lengthKm,
       });
 
-      // Сохраняем анализ, если он есть
       if (existing) {
-      console.log("[Explore SAVE] Existing analysis structure:", {
-        hasAnalysis: !!existing.analysis,
-        analysisType: typeof existing.analysis,
-        analysisValue: typeof existing.analysis === 'string' ? existing.analysis.substring(0, 50) + '...' : existing.analysis,
-        hasStats: !!existing.stats,
-        statsType: typeof existing.stats,
-        statsKeys: existing.stats ? Object.keys(existing.stats) : null,
-        hasTerrainType: !!existing.terrainType,
-        terrainTypeValue: existing.terrainType,
-        hasGeographicContext: !!existing.geographicContext,
-        geographicContextType: typeof existing.geographicContext,
-        geographicContextKeys: existing.geographicContext ? Object.keys(existing.geographicContext) : null,
-        hasFormattedGeoContext: !!existing.formattedGeoContext,
-        formattedGeoContextType: typeof existing.formattedGeoContext,
-        formattedGeoContextValue: typeof existing.formattedGeoContext === 'string' ? existing.formattedGeoContext.substring(0, 100) : existing.formattedGeoContext,
-        hasDailyRoutes: !!existing.dailyRoutes,
-        dailyRoutesLength: existing.dailyRoutes?.length || 0,
-        hasTotalDays: typeof existing.totalDays === 'number',
-        totalDaysValue: existing.totalDays,
-        allKeys: Object.keys(existing),
-      });
-
-        // Убеждаемся, что анализ содержит все необходимые поля
         let analysisText = existing.analysis;
         if (!analysisText || typeof analysisText !== 'string' || analysisText.trim().length === 0) {
-          // Если analysis не строка или пустой, пытаемся преобразовать
           if (existing.analysisStructured) {
             analysisText = JSON.stringify(existing.analysisStructured, null, 2);
           } else if (typeof existing.analysis === 'object' && existing.analysis !== null) {
             analysisText = JSON.stringify(existing.analysis, null, 2);
           } else {
-            // Если ничего не помогло, создаем базовое описание
             analysisText = existing.analysisStructured?.summary?.difficultyReasoning || 
                           "Анализ маршрута выполнен";
           }
         }
 
-        // Проверяем, что analysisText не пустой
         if (!analysisText || analysisText.trim().length === 0) {
           console.error("[Explore SAVE] analysisText пустой после обработки");
           Alert.alert("Ошибка", "Не удалось подготовить данные анализа для сохранения");
@@ -423,25 +357,6 @@ export default function ExploreScreen() {
           sourceUrls: Array.isArray(existing.sourceUrls) ? existing.sourceUrls : undefined,
         };
 
-        console.log("[Explore SAVE] Prepared analysis data:", {
-          hasAnalysis: !!analysisData.analysis && analysisData.analysis.length > 0,
-          hasStats: !!analysisData.stats,
-          hasTerrainType: !!analysisData.terrainType && analysisData.terrainType.length > 0,
-          hasGeographicContext: !!analysisData.geographicContext,
-          hasFormattedGeoContext: !!analysisData.formattedGeoContext && analysisData.formattedGeoContext.length > 0,
-          dailyRoutesCount: analysisData.dailyRoutes.length,
-          totalDays: analysisData.totalDays,
-          dailyRoutesWithWeather: analysisData.dailyRoutes.filter((d: any) => d.weather).length,
-          firstDayWeather: analysisData.dailyRoutes[0]?.weather ? {
-            hasWeather: true,
-            temperature: analysisData.dailyRoutes[0].weather.temperature,
-            conditions: analysisData.dailyRoutes[0].weather.conditions,
-            precipitation: analysisData.dailyRoutes[0].weather.precipitation,
-            windSpeed: analysisData.dailyRoutes[0].weather.windSpeed,
-          } : { hasWeather: false },
-        });
-
-        // Проверяем, что все обязательные поля заполнены
         if (!analysisData.analysis || analysisData.analysis.length === 0) {
           Alert.alert("Ошибка", "Анализ не содержит текстового описания");
           return;
@@ -533,7 +448,6 @@ export default function ExploreScreen() {
                     <TouchableOpacity
                       key={t}
                       onPress={() => {
-                        // Дополнительная проверка на всякий случай
                         if (!isTourismTypeAvailable(t)) {
                           console.log(
                             `[EXPLORE TOURISM TYPE] Блокировка выбора недоступного типа: ${t}`
@@ -1000,7 +914,6 @@ export default function ExploreScreen() {
 
                 </>
               ) : (
-                // Фоллбэк: простой текст, если JSON не распарсился
                 <View style={styles.card}>
                   <View
                     style={{
@@ -1036,7 +949,7 @@ export default function ExploreScreen() {
                     ]}
                   >
                     {existing.analysis
-                      ? // Пытаемся распарсить JSON вручную для красивого отображения
+                      ?
                         (() => {
                           try {
                             const json = JSON.parse(existing.analysis);
@@ -1059,7 +972,7 @@ export default function ExploreScreen() {
                 </View>
               )}
 
-              {/* Источники: откуда бралась информация (sourcesUsed с полем usedFor) или просто список ссылок */}
+              {/* sourcesUsed / sourceUrls */}
               {(Array.isArray(existing.analysisStructured?.sourcesUsed) &&
                 existing.analysisStructured.sourcesUsed.length > 0) ? (
                   <View style={styles.card}>

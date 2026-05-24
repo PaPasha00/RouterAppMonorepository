@@ -33,7 +33,7 @@ route-safety-app/
     └── app.json
 ```
 
-## 🚀 Быстрый старт
+## Быстрый старт
 
 ### Backend
 
@@ -43,7 +43,7 @@ npm install
 npm run dev
 ```
 
-Backend будет доступен на `http://localhost:3000`
+API: `http://localhost:3001` (health: `/health`)
 
 ### Frontend
 
@@ -53,7 +53,7 @@ npm install
 npm start
 ```
 
-Frontend будет доступен на `http://localhost:3001`
+Порт смотри в выводе Vite (обычно 5173).
 
 ### Mobile App
 

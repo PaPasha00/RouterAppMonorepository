@@ -61,10 +61,8 @@ import {
 import { saveRoute, saveRouteAnalysis } from "../../../services/routeService";
 import { isAuthenticated } from "../../../services/authService";
 
-// Тип карты (локально, так как больше не в настройках)
 type MapType = "osm" | "yandex" | "google-satellite" | "2gis" | "apple";
 
-// Интерфейс для точки маршрута с названием
 interface WaypointWithName extends LatLng {
   name: string;
   id: string;
@@ -83,8 +81,7 @@ function haversineKm(a: LatLng, b: LatLng): number {
   return R * c;
 }
 
-// Функция для упрощения маршрута: удаляет точки из центра, которые лежат слишком близко
-// Сохраняет начальные и конечные точки, а также точки с большими изменениями направления
+// Упрощение полилинии: концы + точки с минимальным шагом по расстоянию
 function simplifyRoute(
   points: LatLng[],
   maxPoints: number = 100,
@@ -164,9 +161,8 @@ async function fetchRoadRoute(points: LatLng[]): Promise<LatLng[] | null> {
   }
 }
 
-// Один запрос к Overpass для всего маршрута — быстрее, чем по сегментам
 const OVERPASS_TIMEOUT = 15;
-const RIVER_DEBUG = false; // включить для отладки
+const RIVER_DEBUG = false;
 
 async function fetchRiverRoute(points: LatLng[]): Promise<LatLng[] | null> {
   try {
@@ -401,7 +397,6 @@ out geom;`;
       const startIdx = forward ? bestStartIdx : bestEndIdx;
       const endIdx = forward ? bestEndIdx : bestStartIdx;
 
-      // Функция для извлечения координат из точки геометрии
       const getCoords = (point: any): { lat: number; lon: number } => {
         if (Array.isArray(point)) {
           return { lat: point[0], lon: point[1] };
@@ -484,7 +479,6 @@ export default function HomeScreen() {
   const [editingWaypointName, setEditingWaypointName] = useState("");
   const [routePolyline, setRoutePolyline] = useState<LatLng[] | null>(null);
 
-  // Данные для DraggableFlatList (объединяем точки и названия)
   const routeMenuData = useMemo(() => {
     return waypoints.map((pt, idx) => ({
       id: `waypoint-${idx}-${pt.latitude}-${pt.longitude}`, // Уникальный ID на основе координат
@@ -524,37 +518,23 @@ export default function HomeScreen() {
   const searchRef = useRef<PlaceSearchHandle>(null);
   const mapRef = useRef<MapView>(null);
 
-  // Состояние для отображения километража на маршруте
   const [showDistanceMarkers, setShowDistanceMarkers] = useState(false);
-  // Показывать ли названия точек маршрута (настройка из Settings)
   const [showWaypointNames, setShowWaypointNames] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [mapType, setMapType] = useState<MapType>("osm");
-  const [mapKey, setMapKey] = useState(0); // Для принудительного обновления карты
+  const [mapKey, setMapKey] = useState(0);
 
-  // Используем OSM по умолчанию (выбор карт убран из настроек)
-  // mapType остается для внутреннего использования, но всегда использует OSM
-
-  // Функция для генерации URL тайлов в зависимости от типа карты
   const getTileUrlTemplate = (type: MapType): string => {
     switch (type) {
       case "osm":
-        // OpenStreetMap - используем стандартный сервер тайлов
         return "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
       case "yandex":
-        // Яндекс карты - используем публичный слой
-        // Формат: https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}
         return "https://core-renderer-tiles.maps.yandex.net/tiles?l=map&x={x}&y={y}&z={z}&scale=1&lang=ru_RU";
       case "google-satellite":
-        // Google Satellite - используем поддомены для балансировки нагрузки
-        // Формат: https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}
-        // Используем mt0, mt1, mt2, mt3 для балансировки
         return "https://mt0.google.com/vt/lyrs=s&x={x}&y={y}&z={z}";
       case "2gis":
-        // 2ГИС - используем публичный API
         return "https://tile2.maps.2gis.com/tiles?x={x}&y={y}&z={z}";
       case "apple":
-        // Apple Maps - используем стандартный тип карты (не тайлы)
         return "";
       default:
         return "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -563,7 +543,6 @@ export default function HomeScreen() {
 
   const allTourismTypes = ["пеший", "водный", "автомобильный"];
 
-  // Функция для проверки, доступен ли тип туризма
   const isTourismTypeAvailable = (type: string): boolean => {
     if (type === "водный") {
       // Водный доступен только если выбран водный маршрут
@@ -576,7 +555,6 @@ export default function HomeScreen() {
     return true; // Пеший всегда доступен
   };
 
-  // Автоматически устанавливаем тип туризма при изменении режима маршрута
   useEffect(() => {
     const currentAvailable = isTourismTypeAvailable(tourismType);
 
@@ -657,7 +635,7 @@ export default function HomeScreen() {
           const latDelta = (maxLat - minLat) * 1.5;
           const lngDelta = (maxLng - minLng) * 1.5;
 
-          // Небольшая задержка для того, чтобы карта была готова
+          // дать карте отрисоваться
           setTimeout(() => {
             mapRef.current?.animateToRegion(
               {
@@ -864,7 +842,6 @@ export default function HomeScreen() {
       const coords = pts.map((p) => [p.lat, p.lng] as [number, number]);
       const lengthKm = totalKm;
 
-      // Step 1: Получение данных о высотах (2-3 сек)
       setLoadingStep(0);
       setLoadingProgress(10);
       const elevations = await getElevationData(basePoints);
@@ -874,25 +851,20 @@ export default function HomeScreen() {
         if (delta > 0) gain += delta;
       }
 
-      // Step 2: Анализ географического контекста (1-2 сек)
       setLoadingStep(1);
       setLoadingProgress(30);
       await new Promise((resolve) => setTimeout(resolve, 1500));
 
-      // Step 3: Расчет геометрии маршрута (0.5 сек)
       setLoadingStep(2);
       setLoadingProgress(50);
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Step 4: Анализ ИИ (3-6 сек)
       setLoadingStep(3);
       setLoadingProgress(70);
 
-      // Загружаем настройки для передачи на бэкенд
       const { loadSettings } = await import(
         "../../../store/settingsStore"
       );
-      // Загружаем актуальные настройки из хранилища
       const settings = await loadSettings();
       console.log("[Home ANALYZE] Используемые настройки:", settings);
 
@@ -916,23 +888,6 @@ export default function HomeScreen() {
         body
       );
 
-      // Логирование для проверки данных от ИИ
-      console.log("[Home ANALYZE] Response received:", {
-        hasAnalysis: !!result.analysis,
-        hasAnalysisStructured: !!result.analysisStructured,
-        analysisStructuredKeys: result.analysisStructured
-          ? Object.keys(result.analysisStructured)
-          : null,
-        summary: result.analysisStructured?.summary,
-        stats: result.analysisStructured?.stats,
-        geography: result.analysisStructured?.geography,
-        days: result.analysisStructured?.days?.length || 0,
-        recommendations:
-          result.analysisStructured?.recommendations?.length || 0,
-        warnings: result.analysisStructured?.warnings?.length || 0,
-      });
-
-      // Step 5: Формирование отчета (0.5 сек)
       setLoadingStep(4);
       setLoadingProgress(90);
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -977,7 +932,6 @@ export default function HomeScreen() {
 
     setSavingRoute(true);
     try {
-      // Сохраняем маршрут
       const savedRoute = await saveRoute({
         name: routeName.trim(),
         description: routeDescription.trim() || undefined,
@@ -988,7 +942,6 @@ export default function HomeScreen() {
         lengthKm: info?.lengthKm || 0,
       });
 
-      // Сохраняем анализ, если он есть
       const analysis = getAnalysisResult();
       if (analysis) {
         await saveRouteAnalysis(
@@ -1099,7 +1052,7 @@ export default function HomeScreen() {
     setElevation(data);
   };
 
-  // Функция для вычисления интервала отображения километража в зависимости от масштаба
+  // Интервал меток км в зависимости от zoom
   const getDistanceInterval = (longitudeDelta: number): number => {
     // Вычисляем примерную ширину видимой области в километрах
     // longitudeDelta в градусах, примерно 111 км на градус на экваторе
@@ -1115,7 +1068,6 @@ export default function HomeScreen() {
     return 25; // Каждые 25 км
   };
 
-  // Функция для вычисления точек с километражем на маршруте
   const getDistanceMarkers = useMemo(() => {
     if (!showDistanceMarkers) return [];
 
@@ -1449,7 +1401,6 @@ export default function HomeScreen() {
                 tappable
                 onPress={handleAnalyzePress}
               />
-              {/* Добавляем маркеры в начале и конце маршрута для визуальной проверки */}
               <Marker
                 coordinate={routePolyline[0]}
                 title="Начало маршрута по реке"
@@ -1760,7 +1711,6 @@ export default function HomeScreen() {
                             <TouchableOpacity
                               key={type}
                               onPress={() => {
-                                // Дополнительная проверка на всякий случай
                                 if (!isTourismTypeAvailable(type)) {
                                   console.log(
                                     `[TOURISM TYPE] Блокировка выбора недоступного типа: ${type}`
@@ -2113,7 +2063,6 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     onPress={() => {
                       setInfoOpen(false);
-                      // Save current route and navigate to Explore
                       if (info) {
                         setCurrentRoute({
                           points: info.points,

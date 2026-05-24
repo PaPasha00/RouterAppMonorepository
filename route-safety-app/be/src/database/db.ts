@@ -5,18 +5,15 @@ import * as fs from 'fs';
 const DB_DIR = path.join(__dirname, '../../data');
 const DB_FILE = path.join(DB_DIR, 'app.db');
 
-// Создаем директорию для БД, если её нет
+// data/ для SQLite
 if (!fs.existsSync(DB_DIR)) {
   fs.mkdirSync(DB_DIR, { recursive: true });
 }
 
-// Создаем подключение к БД
 const db: DatabaseType = new Database(DB_FILE);
 
-// Включаем foreign keys
 db.pragma('foreign_keys = ON');
 
-// Создаем таблицу пользователей, если её нет
 db.exec(`
   CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
@@ -72,7 +69,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_route_analyses_userId ON route_analyses(userId);
 `);
 
-console.log('✅ SQLite база данных инициализирована:', DB_FILE);
+console.log(' SQLite база данных инициализирована:', DB_FILE);
 
 export default db;
 

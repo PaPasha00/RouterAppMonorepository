@@ -5,7 +5,7 @@ import { AIAnalysisResponse, AIAnalysisSummary, AIAnalysisStats, AIAnalysisGeogr
  */
 export function validateAndNormalizeAIResponse(rawResponse: any): AIAnalysisResponse | undefined {
   if (!rawResponse || typeof rawResponse !== 'object') {
-    console.error('❌ [AI Validator] Ответ не является объектом');
+    console.error(' [AI Validator] Ответ не является объектом');
     return undefined;
   }
 
@@ -73,7 +73,7 @@ export function validateAndNormalizeAIResponse(rawResponse: any): AIAnalysisResp
       ...(sourcesUsed.length > 0 && { sourcesUsed }),
     };
 
-    console.log('✅ [AI Validator] Ответ успешно нормализован:', {
+    console.log(' [AI Validator] Ответ успешно нормализован:', {
       hasSummary: !!summary,
       hasStats: !!stats,
       hasGeography: !!geography,
@@ -85,7 +85,7 @@ export function validateAndNormalizeAIResponse(rawResponse: any): AIAnalysisResp
 
     return normalized;
   } catch (error: any) {
-    console.error('❌ [AI Validator] Ошибка при нормализации ответа:', error.message);
+    console.error(' [AI Validator] Ошибка при нормализации ответа:', error.message);
     return undefined;
   }
 }
