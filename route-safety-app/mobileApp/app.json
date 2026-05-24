@@ -32,7 +32,7 @@
               "NSExceptionAllowsInsecureHTTPLoads": true,
               "NSIncludesSubdomains": false
             },
-            "172.20.10.2": {
+            "172.20.10.4": {
               "NSExceptionAllowsInsecureHTTPLoads": true,
               "NSIncludesSubdomains": false
             }

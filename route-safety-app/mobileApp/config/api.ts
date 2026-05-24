@@ -22,6 +22,23 @@ const ANDROID_EMULATOR_URL = "http://10.0.2.2:3001";
  * 2. По умолчанию: localhost:3001 для локальной разработки
  */
 function resolveBaseUrl(): string {
+  // В DEV на физическом устройстве / LAN: в первую очередь пробуем автоматически взять IP хоста из Expo hostUri/debuggerHost
+  // Это позволяет не зависеть от закэшированных/устаревших EXPO_PUBLIC_API_BASE_URL.
+  if (__DEV__) {
+    // Пример hostUri: "172.20.10.4:8081"
+    const hostUri =
+      (Constants as any)?.expoConfig?.hostUri ||
+      (Constants as any)?.expoConfig?.debuggerHost ||
+      (Constants as any)?.manifest?.hostUri ||
+      (Constants as any)?.manifest?.debuggerHost;
+    const host = typeof hostUri === "string" ? hostUri.split(":")[0] : "";
+    if (host && host !== "localhost" && host !== "127.0.0.1") {
+      const lanUrl = `http://${host}:3001`;
+      console.log("[API CONFIG] DEV (LAN), используем hostUri хоста:", lanUrl);
+      return lanUrl;
+    }
+  }
+
   // 1. Проверяем явную настройку из app.config.js (высший приоритет)
   const cfgUrl = (Constants as any)?.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL || 
                  (Constants as any)?.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL;

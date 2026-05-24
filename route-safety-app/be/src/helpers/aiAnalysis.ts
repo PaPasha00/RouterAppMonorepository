@@ -115,7 +115,7 @@ function generateDifficultyCriteria(tourismType: string, routeLength: number, el
 - Техническая сложность: требуется опыт вождения в сложных условиях, надежный автомобиль
 
 ОЦЕНКА 9-10 (Экстремально сложно):
-- Протяженность: более 2000 км за весь маршрут
+- Протяженность: более 400 км за весь маршрут
 - Сложность дорог: преимущественно бездорожье, экстремально плохие дороги, опасные участки, возможны участки без дорог
 - Местность: высокогорная, экстремально крутые подъемы и спуски, сложные перевалы, каньоны
 - Погодные условия: экстремальные, штормы, сильные осадки, снег, лед, опасные условия для вождения
@@ -463,7 +463,7 @@ export async function analyzeRouteWithAI(prompt: string): Promise<{ text: string
 
     const model = process.env.OPENROUTER_MODEL || 'openai/gpt-4o-mini';
     const maxTokensEnv = process.env.OPENROUTER_MAX_TOKENS;
-    const defaultMax = 7500; // укладываемся в типичный лимит кредитов OpenRouter; при необходимости задать в .env OPENROUTER_MAX_TOKENS
+    const defaultMax = 12000; // укладываемся в типичный лимит кредитов OpenRouter; при необходимости задать в .env OPENROUTER_MAX_TOKENS
     const maxTokens = maxTokensEnv ? Math.min(Math.max(parseInt(maxTokensEnv, 10) || defaultMax, 1000), 16000) : defaultMax;
     console.log('🤖 Отправка запроса к ИИ... (model:', model, ', max_tokens:', maxTokens, ')');
 
