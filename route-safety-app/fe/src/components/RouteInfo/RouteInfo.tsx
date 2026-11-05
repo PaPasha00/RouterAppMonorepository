@@ -1,92 +1,14 @@
-import React, { useEffect } from "react";
-import { LatLngTuple, ElevationStats } from "../../types";
+import { ElevationStats, LatLngTuple, RouteAnnotation } from "../../types";
+import { exportRoute, ExportFormat } from "../../helpers/exportRoute";
 import { formatLength } from "../../helpers/routeCalculations";
-import { useDraggable } from "../../hooks/useDraggable";
 import styles from "./RouteInfo.module.scss";
 
-interface RouteInfoProps {
-  route: LatLngTuple[];
-  routeLength: number;
-  elevationStats: ElevationStats | null;
-  loadingElevation: boolean;
-  onClear: () => void;
+export default function RouteInfo({ route, routeLength, elevationStats, annotations, onAnnotationsChange, annotationMode, onToggleAnnotation, onClear }: { route: LatLngTuple[]; routeLength: number; elevationStats: ElevationStats | null; loadingElevation: boolean; annotations: RouteAnnotation[]; onAnnotationsChange: (items: RouteAnnotation[]) => void; annotationMode: boolean; onToggleAnnotation: () => void; onClear: () => void }) {
+  const rename = (id: string, name: string) => onAnnotationsChange(annotations.map((p) => p.id === id ? { ...p, name } : p));
+  return <section className={styles.panel}>
+    <div className={styles.summary}><div><span>Общая длина</span><strong>{formatLength(routeLength)}</strong></div><div><span>Точек трека</span><strong>{route.length}</strong></div>{elevationStats && <div><span>Перепад</span><strong>{elevationStats.totalLoss} м</strong></div>}</div>
+    <div className={styles.actions}><button className={annotationMode ? styles.active : ""} onClick={onToggleAnnotation}>{annotationMode ? "Нажмите на карту…" : "+ Подписать точку"}</button><div className={styles.exports}>{(["gpx", "kml", "geojson", "csv"] as ExportFormat[]).map((f) => <button key={f} onClick={() => exportRoute(f, route, annotations)}>{f.toUpperCase()}</button>)}</div></div>
+    {annotations.length > 0 && <div className={styles.labels}>{annotations.map((p) => <div key={p.id}><input aria-label="Название точки" value={p.name} onChange={(e) => rename(p.id, e.target.value)} /><button onClick={() => onAnnotationsChange(annotations.filter((x) => x.id !== p.id))}>×</button></div>)}</div>}
+    <button className={styles.clear} onClick={onClear}>Очистить маршрут</button>
+  </section>;
 }
-
-const RouteInfo: React.FC<RouteInfoProps> = ({
-  route,
-  routeLength,
-  elevationStats,
-  loadingElevation,
-  onClear,
-}) => {
-  const draggable = useDraggable();
-
-  useEffect(() => {
-    // Активируем перетаскивание
-    draggable.enableDragging();
-
-    return () => {
-      draggable.disableDragging();
-    };
-  }, [draggable]);
-
-  return (
-    <div ref={draggable.elementRef} className={styles.routeInfo}>
-      <h4 className={styles.title} onMouseDown={draggable.handleMouseDown}>
-        📈 Маршрут нарисован
-      </h4>
-
-      <div className={styles.stats}>
-        <p className={styles.stat}>
-          <strong>Точек:</strong> {route.length}
-        </p>
-        <p className={styles.stat}>
-          <strong>Длина:</strong> {formatLength(routeLength)}
-        </p>
-
-        {loadingElevation && (
-          <p className={styles.loading}>⏳ Загрузка данных о высотах...</p>
-        )}
-
-        {elevationStats && (
-          <>
-            <p className={styles.stat}>
-              <strong>Набор высоты:</strong> {elevationStats.totalGain} м
-            </p>
-            <p className={styles.stat}>
-              <strong>Спуск:</strong> {elevationStats.totalLoss} м
-            </p>
-            <p className={styles.stat}>
-              <strong>Мин. высота:</strong> {elevationStats.minElevation} м
-            </p>
-            <p className={styles.stat}>
-              <strong>Макс. высота:</strong> {elevationStats.maxElevation} м
-            </p>
-            <p className={styles.stat}>
-              <strong>Ср. высота:</strong> {elevationStats.avgElevation} м
-            </p>
-          </>
-        )}
-      </div>
-
-      <div className={styles.coordinates}>
-        <p className={styles.coordinatesTitle}>
-          <strong>Координаты:</strong>
-        </p>
-        <div className={styles.coordinatesList}>
-          {route.map((coord, index) => (
-            <div key={index} className={styles.coordinate}>
-              {index + 1}. {coord[0].toFixed(6)}, {coord[1].toFixed(6)}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      <button onClick={onClear} className={styles.clearButton}>
-        Очистить маршрут
-      </button>
-    </div>
-  );
-};
-
-export default RouteInfo;

@@ -4,6 +4,7 @@ import styles from "./SearchBox.module.scss";
 
 interface SearchBoxProps {
   onLocationFound: (coords: LatLngTuple, name?: string) => void;
+  onClose: () => void;
 }
 
 interface SearchResult {
@@ -14,12 +15,13 @@ interface SearchResult {
   type: string;
 }
 
-const SearchBox: React.FC<SearchBoxProps> = ({ onLocationFound }) => {
+const SearchBox: React.FC<SearchBoxProps> = ({ onLocationFound, onClose }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Обработка клика вне компонента для скрытия результатов
   React.useEffect(() => {
@@ -37,6 +39,8 @@ const SearchBox: React.FC<SearchBoxProps> = ({ onLocationFound }) => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
+
+  React.useEffect(() => { inputRef.current?.focus(); }, []);
 
   const searchByQuery = async (query: string) => {
     if (!query.trim()) {
@@ -117,16 +121,18 @@ const SearchBox: React.FC<SearchBoxProps> = ({ onLocationFound }) => {
   const isCoordinateInput = /^-?\d+\.?\d*[,\s]+-?\d+\.?\d*$/.test(searchQuery);
 
   return (
-    <div className={styles.searchContainer} ref={searchRef}>
+    <div className={styles.searchContainer} ref={searchRef} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
       <form
         onSubmit={isCoordinateInput ? handleCoordinateSearch : handleSearch}
       >
         <div className={styles.searchInputContainer}>
           <input
+            ref={inputRef}
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Поиск места или координаты (широта, долгота)"
+            placeholder="Найти место или координаты"
+            aria-label="Поиск места на карте"
             className={styles.searchInput}
           />
           <button
@@ -136,6 +142,7 @@ const SearchBox: React.FC<SearchBoxProps> = ({ onLocationFound }) => {
           >
             {isSearching ? "..." : "🔍"}
           </button>
+          <button type="button" className={styles.closeButton} onClick={onClose} aria-label="Закрыть поиск">×</button>
         </div>
       </form>
 

@@ -56,11 +56,16 @@ export const getElevationData = async (coordinates: LatLngTuple[]): Promise<numb
     }
   } catch (error) {
     console.error('Error fetching elevation data:', error);
-    
-    // // Возвращаем заглушку с случайными высотами для демонстрации
-    // console.log('Using simulated elevation data for demo');
-    // return simulateElevationData(coordinates);
+    throw error;
   }
+};
+
+export const simulateElevationData = (coordinates: LatLngTuple[]): number[] => {
+  if (!coordinates.length) return [];
+  const base = 120 + Math.abs(coordinates[0][0] % 1) * 80;
+  return coordinates.map((_, index) =>
+    Math.round(base + Math.sin(index / 7) * 6 + Math.sin(index / 19) * 3)
+  );
 };
 
 /**

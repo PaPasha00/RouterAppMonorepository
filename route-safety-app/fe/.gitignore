@@ -1,0 +1,4 @@
+node_modules/
+dist/
+.vercel/
+route-safety-app.zip

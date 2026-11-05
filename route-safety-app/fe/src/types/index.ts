@@ -1,5 +1,20 @@
 export type LatLngTuple = [number, number];
 
+export interface RouteAnnotation {
+  id: string;
+  name: string;
+  coords: LatLngTuple;
+}
+
+export interface RecentRoute {
+  id: string;
+  createdAt: string;
+  start: LatLngTuple;
+  end: LatLngTuple;
+  coordinates: LatLngTuple[];
+  length: number;
+}
+
 export interface ElevationStats {
   totalGain: number;
   totalLoss: number;

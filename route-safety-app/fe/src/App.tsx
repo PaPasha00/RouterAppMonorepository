@@ -1,172 +1,91 @@
-import React, { useState, useCallback, useRef } from "react";
-import { LatLngTuple, ElevationStats } from "./types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { ElevationStats, LatLngTuple, RecentRoute, RouteAnnotation } from "./types";
 import MapContainer from "./components/Map/MapContainer";
-import RouteAnalyzer from "./components/RouteAnalyzer/RouteAnalyzer";
 import RouteInfo from "./components/RouteInfo/RouteInfo";
-import {
-  formatLength,
-  calculateRouteLength,
-  calculateElevationStats,
-} from "./helpers/routeCalculations";
-import {
-  getElevationData,
-  simulateElevationData,
-} from "./helpers/elevationData";
-import RouteBuilder from "./components/RouteBuilder/RouteBuilder";
-import SideMenu from "./components/Menu/SideMenu";
+import { calculateElevationStats, calculateRouteLength } from "./helpers/routeCalculations";
+import { getElevationData, simulateElevationData } from "./helpers/elevationData";
+import { fetchRiverRoute } from "./helpers/riverRouting";
 import styles from "./App.module.scss";
 
 function App() {
   const [route, setRoute] = useState<LatLngTuple[] | null>(null);
-  const [drawEnabled, setDrawEnabled] = useState(true);
-  const [routeLength, setRouteLength] = useState<number>(0);
-  const [elevationData, setElevationData] = useState<number[] | null>(null);
-  const [elevationStats, setElevationStats] = useState<ElevationStats | null>(
-    null
-  );
-  const [loadingElevation, setLoadingElevation] = useState(false);
-
-  const [mode, setMode] = useState<"none" | "search" | "route">("none");
-  const [aiVisible, setAiVisible] = useState(false);
-
-  const [pickMode, setPickMode] = useState<"start" | "end" | null>(null);
-  const routeBuilderRef = useRef<{
-    setStart: (v: string) => void;
-    setEnd: (v: string) => void;
-  } | null>(null);
-
   const [startPoint, setStartPoint] = useState<LatLngTuple | null>(null);
   const [endPoint, setEndPoint] = useState<LatLngTuple | null>(null);
+  const [routeLength, setRouteLength] = useState(0);
+  const [elevationStats, setElevationStats] = useState<ElevationStats | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [annotations, setAnnotations] = useState<RouteAnnotation[]>([]);
+  const [annotationMode, setAnnotationMode] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const historyRef = useRef<HTMLElement>(null);
+  const historyButtonRef = useRef<HTMLButtonElement>(null);
+  const [recentRoutes, setRecentRoutes] = useState<RecentRoute[]>(() => {
+    try { return JSON.parse(localStorage.getItem("river-route-history-v1") || "[]"); }
+    catch { return []; }
+  });
 
-  const handleRouteCreated = useCallback(
-    (
-      coords: LatLngTuple[],
-      length: number,
-      elevations: number[],
-      stats: ElevationStats
-    ) => {
-      setRoute(coords);
-      setRouteLength(length);
-      setElevationData(elevations);
-      setElevationStats(stats);
-      setDrawEnabled(false);
-    },
-    []
-  );
+  useEffect(() => {
+    if (!historyOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!historyRef.current?.contains(target) && !historyButtonRef.current?.contains(target)) setHistoryOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [historyOpen]);
 
-  const handleRouteCleared = useCallback(() => {
-    setRoute(null);
-    setRouteLength(0);
-    setElevationData(null);
-    setElevationStats(null);
-    setDrawEnabled(true);
+  const clear = useCallback(() => {
+    setRoute(null); setStartPoint(null); setEndPoint(null); setRouteLength(0);
+    setElevationStats(null); setAnnotations([]); setError(null); setAnnotationMode(false);
   }, []);
 
-  const handleRouteBuilt = useCallback(async (coords: LatLngTuple[]) => {
-    setRoute(coords);
-    const length = calculateRouteLength(coords);
-    setRouteLength(length);
-    setLoadingElevation(true);
+  const build = useCallback(async (start: LatLngTuple, end: LatLngTuple) => {
+    setLoading(true); setError(null);
     try {
-      const elevations = await getElevationData(coords);
-      const stats = calculateElevationStats(elevations);
-      setElevationData(elevations);
-      setElevationStats(stats);
-    } catch (e) {
-      const simulated = simulateElevationData(coords);
-      const stats = calculateElevationStats(simulated);
-      setElevationData(simulated);
-      setElevationStats(stats);
-    } finally {
-      setLoadingElevation(false);
-      setDrawEnabled(false);
+      const coords = await fetchRiverRoute(start, end);
+      const length = calculateRouteLength(coords);
+      setRoute(coords); setRouteLength(length);
+      setRecentRoutes((items) => {
+        const next = [{ id: crypto.randomUUID(), createdAt: new Date().toISOString(), start, end, coordinates: coords, length }, ...items].slice(0, 8);
+        localStorage.setItem("river-route-history-v1", JSON.stringify(next));
+        return next;
+      });
+      try { setElevationStats(calculateElevationStats(await getElevationData(coords))); }
+      catch { setElevationStats(calculateElevationStats(simulateElevationData(coords))); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Не удалось построить маршрут"); }
+    finally { setLoading(false); }
+  }, []);
+
+  const handleMapClick = useCallback((coords: LatLngTuple) => {
+    if (annotationMode && route) {
+      setAnnotations((items) => [...items, { id: crypto.randomUUID(), name: `Точка ${items.length + 1}`, coords }]);
+      setAnnotationMode(false); return;
     }
-  }, []);
+    if (loading) return;
+    if (route) return;
+    if (!startPoint) {
+      setRoute(null); setEndPoint(null); setStartPoint(coords); setError(null); setAnnotations([]);
+    } else { setEndPoint(coords); build(startPoint, coords); }
+  }, [annotationMode, route, loading, startPoint, build]);
 
-  const handleRequestPick = useCallback((which: "start" | "end") => {
-    setPickMode(which);
-  }, []);
-
-  const handlePick = useCallback(
-    (coords: LatLngTuple) => {
-      const text = `${coords[0].toFixed(6)}, ${coords[1].toFixed(6)}`;
-      if (pickMode === "start") {
-        routeBuilderRef.current?.setStart(text);
-        setStartPoint(coords);
-      } else if (pickMode === "end") {
-        routeBuilderRef.current?.setEnd(text);
-        setEndPoint(coords);
-      }
-      setPickMode(null);
-    },
-    [pickMode]
-  );
-
-  const handlePointChanged = useCallback(
-    (which: "start" | "end", coords: LatLngTuple | null) => {
-      if (which === "start") setStartPoint(coords);
-      else setEndPoint(coords);
-    },
-    []
-  );
-
-  const handleToggleMode = useCallback((panel: "search" | "route") => {
-    setMode((prev) => (prev === panel ? "none" : panel));
-  }, []);
-
-  const handleToggleAI = useCallback(() => {
-    setAiVisible((v) => !v);
+  const loadRecent = useCallback((item: RecentRoute) => {
+    setRoute(item.coordinates); setStartPoint(item.start); setEndPoint(item.end);
+    setRouteLength(item.length); setElevationStats(null); setAnnotations([]);
+    setError(null); setHistoryOpen(false);
   }, []);
 
   return (
-    <div className={styles.app}>
-      <SideMenu
-        mode={mode}
-        aiVisible={aiVisible}
-        onToggleMode={handleToggleMode}
-        onToggleAI={handleToggleAI}
-      />
-
-      {aiVisible && (
-        <RouteAnalyzer
-          route={route}
-          length={Number(formatLength(routeLength).replace(" км", ""))}
-          elevationGain={elevationStats?.totalGain || 0}
-          elevationData={elevationData}
-        />
-      )}
-
-      <MapContainer
-        route={route}
-        onRouteCreated={handleRouteCreated}
-        onRouteCleared={handleRouteCleared}
-        drawEnabled={drawEnabled}
-        pickMode={pickMode}
-        onPick={handlePick}
-        startPoint={startPoint}
-        endPoint={endPoint}
-        showSearch={mode === "search"}
-      />
-
-      {mode === "route" && (
-        <RouteBuilder
-          onRouteBuilt={handleRouteBuilt}
-          onRequestPick={handleRequestPick}
-          onPointChanged={handlePointChanged}
-          ref={routeBuilderRef as any}
-        />
-      )}
-
-      {route && (
-        <RouteInfo
-          route={route}
-          routeLength={routeLength}
-          elevationStats={elevationStats}
-          loadingElevation={loadingElevation}
-          onClear={handleRouteCleared}
-        />
-      )}
-    </div>
+    <main className={styles.app}>
+      <header className={styles.hero}>
+        <div className={styles.status}>{loading && <i className={styles.spinner} aria-hidden="true" />}<div><strong>{loading ? "Строим маршрут…" : "Речной маршрут"}</strong><span>{loading ? "Поиск может занять несколько минут" : error ? "Попробуйте выбрать точки заново" : !startPoint ? "Нажмите точку старта" : !endPoint ? "Теперь нажмите точку финиша" : route ? "Маршрут готов" : "Нажмите новую точку старта"}</span></div></div>
+        <div className={styles.headerActions}>{recentRoutes.length > 0 && <button ref={historyButtonRef} onClick={() => setHistoryOpen((v) => !v)}>Недавние</button>}{(startPoint || route) && <button onClick={clear}>Сбросить</button>}</div>
+      </header>
+      {historyOpen && <><div className={styles.historyBackdrop} onClick={() => setHistoryOpen(false)} aria-hidden="true" /><section ref={historyRef} className={styles.history}><div className={styles.historyHeader}><strong>Недавние маршруты</strong><button className={styles.historyClose} onClick={() => setHistoryOpen(false)} aria-label="Закрыть недавние маршруты" /></div>{recentRoutes.map((item) => <button key={item.id} onClick={() => loadRecent(item)}><span>{new Date(item.createdAt).toLocaleString("ru-RU", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}</span><b>{(item.length / 1000).toFixed(1)} км</b></button>)}</section></>}
+      {error && <div className={styles.error}>{error}<button onClick={() => setError(null)}>×</button></div>}
+      <MapContainer route={route} startPoint={startPoint} endPoint={endPoint} annotations={annotations} onMapClick={handleMapClick} />
+      {route && <RouteInfo route={route} routeLength={routeLength} elevationStats={elevationStats} loadingElevation={loading} annotations={annotations} onAnnotationsChange={setAnnotations} annotationMode={annotationMode} onToggleAnnotation={() => setAnnotationMode((v) => !v)} onClear={clear} />}
+    </main>
   );
 }
 
