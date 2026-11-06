@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tomickigrzegorz/leaflet-rotate": "^0.3.0",
     "leaflet": "^1.9.4",
     "leaflet-draw": "^1.0.4",
     "react": "^19.1.1",

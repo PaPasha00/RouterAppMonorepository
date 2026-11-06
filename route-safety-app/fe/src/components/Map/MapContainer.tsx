@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MapContainer as LeafletMap, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
+import { Circle, CircleMarker, MapContainer as LeafletMap, Marker, Polyline, Popup, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import "@tomickigrzegorz/leaflet-rotate";
+import "@tomickigrzegorz/leaflet-rotate/css";
 import { LatLngTuple, RouteAnnotation } from "../../types";
 import SearchBox from "../Search/SearchBox";
 import styles from "./MapContainer.module.scss";
@@ -22,24 +24,64 @@ type TileProvider = keyof typeof TILE_PROVIDERS;
 function Controls({ searchOpen, onToggleSearch }: { searchOpen: boolean; onToggleSearch: () => void }) {
   const map = useMap();
   const containerRef = useRef<HTMLDivElement>(null);
+  const [bearing, setBearing] = useState(0);
+  const [rotateOpen, setRotateOpen] = useState(false);
+  const [location, setLocation] = useState<{ center: LatLngTuple; accuracy: number } | null>(null);
+  const [locationError, setLocationError] = useState("");
+  const [locating, setLocating] = useState(false);
   useEffect(() => {
     if (!containerRef.current) return;
     const container = containerRef.current;
     L.DomEvent.disableClickPropagation(container);
     L.DomEvent.disableScrollPropagation(container);
-    const handleClick = (event: Event) => {
-      event.stopPropagation();
-      const action = (event.currentTarget as HTMLButtonElement).dataset.action;
-      if (action === "search") onToggleSearch();
-      if (action === "in") map.zoomIn();
-      if (action === "out") map.zoomOut();
-      if (action === "locate") map.locate({ setView: true, maxZoom: 15 });
+  }, []);
+  useEffect(() => {
+    const handleRotate = () => setBearing(Math.round(map.getBearing()));
+    const handleFound = (event: L.LocationEvent) => {
+      setLocation({ center: [event.latlng.lat, event.latlng.lng], accuracy: event.accuracy });
+      setLocationError("");
+      setLocating(false);
     };
-    const buttons = Array.from(container.querySelectorAll("button"));
-    buttons.forEach((button) => button.addEventListener("click", handleClick));
-    return () => buttons.forEach((button) => button.removeEventListener("click", handleClick));
-  }, [map, onToggleSearch]);
-  return <div ref={containerRef} className={styles.controls}><button data-action="search" className={searchOpen ? styles.activeControl : ""} title="Поиск мест">🔍</button><button data-action="in">+</button><button data-action="out">−</button><button data-action="locate" title="Моё место">◎</button></div>;
+    const handleError = (event: L.ErrorEvent) => {
+      const messages: Record<number, string> = {
+        1: "Разрешите доступ к геопозиции в настройках браузера",
+        2: "Геопозиция сейчас недоступна. Проверьте GPS и сеть",
+        3: "Не удалось определить местоположение. Попробуйте ещё раз",
+      };
+      setLocationError(messages[event.code] || "Не удалось определить геопозицию");
+      setLocating(false);
+    };
+    map.on("rotate", handleRotate);
+    map.on("locationfound", handleFound);
+    map.on("locationerror", handleError);
+    return () => {
+      map.off("rotate", handleRotate);
+      map.off("locationfound", handleFound);
+      map.off("locationerror", handleError);
+    };
+  }, [map]);
+  const locate = () => {
+    setLocationError("");
+    setRotateOpen(false);
+    setLocating(true);
+    map.locate({ setView: true, maxZoom: 15, enableHighAccuracy: true, timeout: 10000 });
+  };
+  return <>
+    <div ref={containerRef} className={styles.controls}>
+      <button onClick={onToggleSearch} className={searchOpen ? styles.activeControl : ""} title="Поиск мест" aria-label="Поиск мест">🔍</button>
+      <button onClick={() => map.zoomIn()} aria-label="Приблизить">+</button>
+      <button onClick={() => map.zoomOut()} aria-label="Отдалить">−</button>
+      <button onClick={locate} title="Моё место" aria-label="Определить моё место" aria-busy={locating} className={location ? styles.activeControl : locating ? styles.locatingControl : ""}>{locating ? "…" : "◎"}</button>
+      <button onClick={() => setRotateOpen((value) => !value)} title="Повернуть карту" aria-label="Повернуть карту" aria-expanded={rotateOpen} className={bearing !== 0 ? styles.activeControl : ""} style={{ transform: `rotate(${-bearing}deg)` }}>🧭</button>
+      {rotateOpen && <div className={styles.rotatePanel}>
+        <div><strong>Поворот карты</strong><span>{bearing}°</span></div>
+        <input type="range" min="0" max="359" value={bearing} onChange={(event) => map.setBearing(Number(event.target.value))} aria-label="Угол поворота карты" />
+        <button className={styles.northButton} onClick={() => map.setBearing(0)}>Сбросить на север</button>
+      </div>}
+      {locationError && <div className={styles.locationError} role="alert">{locationError}</div>}
+    </div>
+    {location && <><Circle center={location.center} radius={location.accuracy} pathOptions={{ color: "#087f72", fillColor: "#71d8c9", fillOpacity: .14, weight: 1 }} /><CircleMarker center={location.center} radius={7} pathOptions={{ color: "#fff", fillColor: "#087f72", fillOpacity: 1, weight: 3 }}><Popup>Вы здесь<br />Точность: до {Math.round(location.accuracy)} м</Popup></CircleMarker></>}
+  </>;
 }
 
 function Events({ onClick, onZoom }: { onClick: (p: LatLngTuple) => void; onZoom: (z: number) => void }) {
@@ -111,7 +153,7 @@ export default function MapContainer({ route, startPoint, endPoint, annotations,
   return <div className={styles.mapContainer}>
     {searchOpen && <SearchBox onClose={() => setSearchOpen(false)} onLocationFound={(coords, name) => { setSearchPoint({ coords, name: name || "Найденное место" }); setSearchOpen(false); }} />}
     <div ref={layersRef} className={styles.layers} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}><button className={styles.layersButton} onClick={() => setLayersOpen((v) => !v)} aria-expanded={layersOpen}>▦ <span>Слои</span></button>{layersOpen && <div className={styles.layersMenu}>{(Object.entries(TILE_PROVIDERS) as [TileProvider, typeof tiles][]).map(([key, item]) => <button key={key} className={key === provider ? styles.selectedLayer : ""} onClick={() => { setProvider(key); setLayersOpen(false); }}>{item.name}</button>)}</div>}</div>
-    <LeafletMap center={[56.84, 60.61]} zoom={10} className={styles.map} zoomControl={false} preferCanvas>
+    <LeafletMap center={[56.84, 60.61]} zoom={10} className={styles.map} zoomControl={false} preferCanvas rotate touchRotate dragRotate shiftKeyRotate rotateControl={false}>
     <TileLayer key={provider} attribution={tiles.attribution} url={tiles.url} />
     <ResizeMap /><Events onClick={onMapClick} onZoom={setZoom} /><Controls searchOpen={searchOpen} onToggleSearch={() => setSearchOpen((v) => !v)} /><FitRoute route={route} /><GoToSearch point={searchPoint?.coords || null} />
     {route && <><Polyline positions={route} pathOptions={{ color: "#ffffff", weight: 9, opacity: .9 }} /><Polyline positions={route} pathOptions={{ color: "#087f72", weight: 5 }} /></>}
