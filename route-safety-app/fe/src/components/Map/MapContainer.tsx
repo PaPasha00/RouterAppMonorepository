@@ -57,6 +57,29 @@ function GoToSearch({ point }: { point: LatLngTuple | null }) {
   return null;
 }
 
+function ResizeMap() {
+  const map = useMap();
+  useEffect(() => {
+    let frame = 0;
+    const resize = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+    };
+    const observer = new ResizeObserver(resize);
+    observer.observe(map.getContainer());
+    window.addEventListener("resize", resize);
+    window.visualViewport?.addEventListener("resize", resize);
+    resize();
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", resize);
+      window.visualViewport?.removeEventListener("resize", resize);
+    };
+  }, [map]);
+  return null;
+}
+
 function routeMarkers(route: LatLngTuple[], zoom: number) {
   const interval = zoom >= 14 ? 1 : zoom >= 11 ? 5 : zoom >= 9 ? 10 : 25;
   const result: { coords: LatLngTuple; km: number }[] = []; let travelled = 0; let next = interval * 1000;
@@ -90,7 +113,7 @@ export default function MapContainer({ route, startPoint, endPoint, annotations,
     <div ref={layersRef} className={styles.layers} onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}><button className={styles.layersButton} onClick={() => setLayersOpen((v) => !v)} aria-expanded={layersOpen}>▦ <span>Слои</span></button>{layersOpen && <div className={styles.layersMenu}>{(Object.entries(TILE_PROVIDERS) as [TileProvider, typeof tiles][]).map(([key, item]) => <button key={key} className={key === provider ? styles.selectedLayer : ""} onClick={() => { setProvider(key); setLayersOpen(false); }}>{item.name}</button>)}</div>}</div>
     <LeafletMap center={[56.84, 60.61]} zoom={10} className={styles.map} zoomControl={false} preferCanvas>
     <TileLayer key={provider} attribution={tiles.attribution} url={tiles.url} />
-    <Events onClick={onMapClick} onZoom={setZoom} /><Controls searchOpen={searchOpen} onToggleSearch={() => setSearchOpen((v) => !v)} /><FitRoute route={route} /><GoToSearch point={searchPoint?.coords || null} />
+    <ResizeMap /><Events onClick={onMapClick} onZoom={setZoom} /><Controls searchOpen={searchOpen} onToggleSearch={() => setSearchOpen((v) => !v)} /><FitRoute route={route} /><GoToSearch point={searchPoint?.coords || null} />
     {route && <><Polyline positions={route} pathOptions={{ color: "#ffffff", weight: 9, opacity: .9 }} /><Polyline positions={route} pathOptions={{ color: "#087f72", weight: 5 }} /></>}
     {kms.map((p) => <Marker key={p.km} position={p.coords} icon={badge(`${p.km} км`)} interactive={false} />)}
     {startPoint && <Marker position={startPoint} icon={pin("А", "start")}><Popup>Старт</Popup></Marker>}
